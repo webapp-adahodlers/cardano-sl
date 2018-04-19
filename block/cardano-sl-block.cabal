@@ -84,6 +84,7 @@ library
                       , containers
                       , cryptonite
                       , data-default
+                      , deepseq
                       , directory
                       , ekg-core
                       , ether

@@ -190,6 +190,13 @@ data BlockHeader
 deriving instance Generic BlockHeader
 deriving instance (Eq GenesisBlockHeader, Eq MainBlockHeader) => Eq BlockHeader
 deriving instance (Show GenesisBlockHeader, Show MainBlockHeader) => Show BlockHeader
+instance
+    ( NFData (GenesisBlockHeader)
+    , NFData (MainBlockHeader)
+    )
+    => NFData BlockHeader where
+    rnf (BlockHeaderGenesis header) = rnf header
+    rnf (BlockHeaderMain header) = rnf header
 
 choosingBlockHeader :: Functor f =>
        LensLike' f GenesisBlockHeader r

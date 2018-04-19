@@ -60,7 +60,7 @@ verifyAndApplyBlocks' ::
     -> m ()
 verifyAndApplyBlocks' blunds = do
     satisfySlotCheck blocks $ do
-        (_ :: HeaderHash) <- eitherToThrow =<<
+        (_ :: HeaderHash, _) <- eitherToThrow =<<
             verifyAndApplyBlocks True blocks
         return ()
   where

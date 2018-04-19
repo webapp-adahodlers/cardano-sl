@@ -502,9 +502,9 @@ instance MonadBListener BlockTestMode where
 
 type instance MempoolExt BlockTestMode = EmptyMempoolExt
 
-instance HasConfigurations => MonadTxpLocal (BlockGenMode EmptyMempoolExt BlockTestMode) where
-    txpNormalize = withCompileInfo def $ txNormalize
-    txpProcessTx = withCompileInfo def $ txProcessTransactionNoLock
+instance MonadTxpLocal (BlockGenMode EmptyMempoolExt BlockTestMode) where
+    txpNormalize = return () -- withCompileInfo def $ txNormalize
+    txpProcessTx = \_ -> return $ Right () -- withCompileInfo def $ txProcessTransactionNoLock
 
 instance HasConfigurations => MonadTxpLocal BlockTestMode where
     txpNormalize = withCompileInfo def $ txNormalize

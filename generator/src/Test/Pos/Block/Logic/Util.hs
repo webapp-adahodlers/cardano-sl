@@ -99,9 +99,12 @@ bpGenBlock
        , HasAllSecrets ctx
        , Default (MempoolExt m)
        )
-    => EnableTxPayload -> InplaceDB -> PropertyM m Blund
+    => EnableTxPayload
+    -> InplaceDB
+    -> PropertyM m Blund
 -- 'unsafeHead' is safe because we create exactly 1 block
-bpGenBlock = fmap (unsafeHead . toList) ... bpGenBlocks (Just 1)
+bpGenBlock =
+    fmap (unsafeHead . toList) ... bpGenBlocks (Just 1)
 
 getAllSecrets :: (MonadReader ctx m, HasAllSecrets ctx) => m AllSecrets
 getAllSecrets = view allSecrets

@@ -193,15 +193,17 @@ genBlock eos = do
     genBlockNoApply eos tipHeader >>= \case
         Just block@Left{}   ->
             let slot0 = SlotId epoch minBound
-            in fmap Just $ withCurrentSlot slot0 $ lift $ verifyAndApply block
-        Just block@Right{}  -> fmap Just $ lift $ verifyAndApply block
-        Nothing     -> return Nothing
+            in fmap Just $ withCurrentSlot slot0 $ lift $ verifyAndApply (Just slot0) block
+        Just block@Right {} ->
+            fmap Just $ lift $ verifyAndApply Nothing block
+        Nothing -> return Nothing
     where
     verifyAndApply
-        :: Block
+        :: Maybe SlotId
+        -> Block
         -> BlockGenMode (MempoolExt m) m Blund
-    verifyAndApply block =
-        verifyBlocksPrefix (one block) >>= \case
+    verifyAndApply curSlot block =
+        verifyBlocksPrefix curSlot (one block) >>= \case
             Left err -> throwM (BGCreatedInvalid err)
             Right (undos, pollModifier) -> do
                 let undo = undos ^. _Wrapped . _neHead

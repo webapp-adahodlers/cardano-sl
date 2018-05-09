@@ -6,16 +6,19 @@ import           Control.Monad.Random.Strict (evalRandT)
 import           Control.DeepSeq (force)
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Text as T
+import qualified Data.ByteString.Lazy as BSL
 import           Data.Time.Units (Microsecond, convertUnit)
 import           Formatting (sformat, shown, stext, (%))
 import qualified GHC.Exts as IL
 import qualified Options.Applicative as Opts
+import           System.Directory (doesFileExist)
 import           System.Random (newStdGen)
 import           System.Wlog (LoggerName (..), LoggerConfig, consoleActionB, debugPlus, setupLogging, defaultHandleAction, termSeveritiesOutB, consoleActionB, logInfo, logDebug, logError)
 
 import           Mockable.CurrentTime (realTime)
 
 import           Pos.AllSecrets (mkAllSecretsSimple)
+import           Pos.Binary.Class (serialize, decodeFull)
 import           Pos.Block.Error (ApplyBlocksException, VerifyBlocksException)
 import           Pos.Block.Logic.VAR (verifyAndApplyBlocks, verifyBlocksPrefix, rollbackBlocks)
 import           Pos.Core (Block, headerHash)
@@ -26,6 +29,7 @@ import           Pos.Core.Slotting (Timestamp (..))
 import           Pos.DB.DB (initNodeDBs)
 import           Pos.Generator.Block (BlockGenParams (..), TxGenParams (..), genBlocksNoApply)
 import           Pos.Launcher.Configuration (ConfigurationOptions (..), HasConfigurations, defaultConfigurationOptions, withConfigurationsM)
+import           Pos.Slotting (MonadSlots (getCurrentSlot))
 import           Pos.Txp.Logic.Global (txpGlobalSettings)
 import           Pos.Util.Chrono (OldestFirst (..), NE, nonEmptyNewestFirst)
 import           Pos.Util.CompileInfo (withCompileInfo, retrieveCompileTimeInfo)
@@ -83,6 +87,7 @@ data BenchArgs = BenchArgs
     , baBlockCount :: BlockCount
     , baRuns       :: Int
     , baApply      :: Bool
+    , baBlockCache :: Maybe FilePath
     }
 
 configPathP :: Opts.Parser FilePath
@@ -120,6 +125,11 @@ applyBlocksP = Opts.switch $
     <> Opts.short 'a'
     <> Opts.help "apply blocks: runs `verifyAndApplyBlocks` otherwise it runs `verifyBlocksPrefix`"
 
+blockCacheP :: Opts.Parser (Maybe FilePath)
+blockCacheP = Opts.optional $ Opts.strOption $
+       Opts.long "block-cache"
+    <> Opts.help "path to block cache (file where generated blocks are written / read from)"
+
 benchArgsParser :: Opts.Parser BenchArgs
 benchArgsParser = BenchArgs
     <$> configPathP
@@ -127,6 +137,23 @@ benchArgsParser = BenchArgs
     <*> blockCountP
     <*> runsP
     <*> applyBlocksP
+    <*> blockCacheP
+
+-- | Write generated blocks to a file.
+writeBlocks :: FilePath -> OldestFirst NE Block -> IO ()
+writeBlocks path bs = do
+    let sbs = serialize bs
+    BSL.writeFile path sbs
+
+-- | Read generated blocks from a file.
+readBlocks :: FilePath -> IO (Maybe (OldestFirst NE Block))
+readBlocks path = do
+    sbs <- BSL.readFile path
+    case decodeFull sbs of
+        Left err -> do
+            putStrLn err
+            return Nothing
+        Right bs -> return (Just bs)
 
 main :: IO ()
 main = do
@@ -154,11 +181,32 @@ main = do
             in runBlockTestMode tp $ do
                 -- initialize databasea
                 initNodeDBs
-                -- generate blocks and evaluate them to normal form
-                logInfo "Generating blocks"
-                bs <- generateBlocks (baBlockCount args)
+                bs <- case baBlockCache args of
+                    Nothing -> do
+                        -- generate blocks and evaluate them to normal form
+                        logInfo "Generating blocks"
+                        generateBlocks (baBlockCount args)
+                    Just path -> do
+                        fileExists <- liftIO $ doesFileExist path
+                        if fileExists
+                            then do
+                                liftIO (readBlocks path) >>= \case
+                                    Nothing -> do
+                                        -- generate blocks and evaluate them to normal form
+                                        logInfo "Generating blocks"
+                                        bs <- generateBlocks (baBlockCount args)
+                                        liftIO $ writeBlocks path bs
+                                        return bs
+                                    Just bs -> return bs
+                            else do
+                                -- generate blocks and evaluate them to normal form
+                                logInfo "Generating blocks"
+                                bs <- generateBlocks (baBlockCount args)
+                                liftIO $ writeBlocks path bs
+                                return bs
+
                 logDebug $ sformat ("generated blocks:\n\t"%stext) $ T.intercalate "\n\t" $ map (show . headerHash) (IL.toList bs)
-                let bss = force $ take (baRuns args) $ repeat bs
+                let bss = force $ replicate (baRuns args) bs
 
                 logInfo "Verifying blocks"
                 (times, errs) <- unzip <$> forM bss
@@ -175,7 +223,7 @@ main = do
                     -- standard deviation of the execution time distribution
                     stddev :: Float
                     stddev = sqrt . (\x -> x / realToFrac (length itimes - 1)) . avarage . map ((**2) . (-) mean) $ itimes
-                logInfo $ sformat ("verification and application mean time: "%shown%"msc stddev: "%shown) mean stddev
+                logInfo $ sformat ("verification and application mean time: "%shown%"μs stddev: "%shown) mean stddev
 
                 -- print errors
                 let errs' = catMaybes errs
@@ -197,7 +245,9 @@ main = do
             -> BlockTestMode (Microsecond, Maybe (Either VerifyBlocksException ApplyBlocksException))
         validate blocks = do
             verStart <- realTime
-            res <- (force . either Left (Right . fst)) <$> verifyBlocksPrefix Nothing blocks
+            -- omitting current slot for simplicity
+            ctx <- getCurrentSlot
+            res <- (force . either Left (Right . fst)) <$> verifyBlocksPrefix ctx blocks
             verEnd <- realTime
             return (verEnd - verStart, either (Just . Left) (const Nothing) res)
 
@@ -207,7 +257,8 @@ main = do
             -> BlockTestMode (Microsecond, Maybe (Either VerifyBlocksException ApplyBlocksException))
         validateAndApply blocks = do
             verStart <- realTime
-            res <- force <$> verifyAndApplyBlocks Nothing False blocks
+            ctx <- getCurrentSlot
+            res <- force <$> verifyAndApplyBlocks ctx False blocks
             verEnd <- realTime
             case res of
                 Left _ -> return ()

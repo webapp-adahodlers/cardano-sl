@@ -31,7 +31,7 @@ import           Pos.Binary.Txp ()
 import           Pos.Block.BlockWorkMode (BlockWorkMode)
 import           Pos.Block.Error (ApplyBlocksException)
 import           Pos.Block.Logic (ClassifyHeaderRes (..), classifyNewHeader, lcaWithMainChain,
-                                  verifyAndApplyBlocks)
+                                  getVerifyBlocksContext, verifyAndApplyBlocks)
 import qualified Pos.Block.Logic as L
 import           Pos.Block.RetrievalQueue (BlockRetrievalQueue, BlockRetrievalQueueTag,
                                            BlockRetrievalTask (..))
@@ -45,7 +45,6 @@ import qualified Pos.DB.Block.Load as DB
 import           Pos.Diffusion.Types (Diffusion)
 import qualified Pos.Diffusion.Types as Diffusion (Diffusion (announceBlockHeader, requestTip))
 import           Pos.Exception (cardanoExceptionFromException, cardanoExceptionToException)
-import           Pos.Slotting (MonadSlots (getCurrentSlot))
 import           Pos.Recovery.Info (recoveryInProgress)
 import           Pos.Reporting.MemState (HasMisbehaviorMetrics (..), MisbehaviorMetrics (..))
 import           Pos.StateLock (Priority (..), modifyStateLock)
@@ -283,8 +282,8 @@ applyWithoutRollback diffusion blocks = do
         :: HeaderHash -> m (HeaderHash, Either ApplyBlocksException HeaderHash)
     applyWithoutRollbackDo curTip = do
         logInfo "Verifying and applying blocks..."
-        curSlot <- getCurrentSlot
-        res <- fmap fst <$> verifyAndApplyBlocks curSlot False blocks
+        ctx <- getVerifyBlocksContext
+        res <- fmap fst <$> verifyAndApplyBlocks ctx False blocks
         logInfo "Verifying and applying blocks done"
         let newTip = either (const curTip) identity res
         pure (newTip, res)

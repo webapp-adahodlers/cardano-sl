@@ -15,15 +15,16 @@ import           Data.List.NonEmpty (NonEmpty ((:|)))
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Ratio as Ratio
 import           Data.Semigroup ((<>))
+import qualified GHC.Exts as IL
 import           Test.Hspec (Spec, describe)
 import           Test.Hspec.QuickCheck (modifyMaxSuccess)
 import           Test.QuickCheck.Gen (Gen (MkGen))
-import           Test.QuickCheck.Monadic (assert, pick, pre)
+import           Test.QuickCheck.Monadic (assert, pick, pre, run)
 import           Test.QuickCheck.Random (QCGen)
 
-import           Pos.Block.Logic (verifyAndApplyBlocks, verifyBlocksPrefix)
+import           Pos.Block.Logic (getVerifyBlocksContext', verifyAndApplyBlocks, verifyBlocksPrefix)
 import           Pos.Block.Types (Blund)
-import           Pos.Core (GenesisData (..), HasConfiguration, blkSecurityParam, epochSlots,
+import           Pos.Core (GenesisData (..), HasConfiguration, EpochOrSlot (..), blkSecurityParam, getEpochOrSlot, epochSlots,
                            genesisData, headerHash)
 import           Pos.DB.Pure (dbPureDump)
 import           Pos.Generator.BlockEvent.DSL (BlockApplyResult (..), BlockEventGenT,
@@ -33,13 +34,12 @@ import           Pos.Generator.BlockEvent.DSL (BlockApplyResult (..), BlockEvent
                                                pathSequence, runBlockEventGenT)
 import qualified Pos.GState as GS
 import           Pos.Launcher (HasConfigurations)
-import           Pos.Slotting (MonadSlots (getCurrentSlot))
 import           Pos.Util.Chrono (NE, NewestFirst (..), OldestFirst (..), nonEmptyNewestFirst,
                                   nonEmptyOldestFirst, splitAtNewestFirst, toNewestFirst,
                                   _NewestFirst)
 
 import           Test.Pos.Block.Logic.Event (BlockScenarioResult (..),
-                                             DbNotEquivalentToSnapshot (..), runBlockScenario)
+                                             DbNotEquivalentToSnapshot (..), lastSlot, runBlockScenario)
 import           Test.Pos.Block.Logic.Mode (BlockProperty, BlockTestMode)
 import           Test.Pos.Block.Logic.Util (EnableTxPayload (..), InplaceDB (..), bpGenBlock,
                                             bpGenBlocks, bpGoToArbitraryState, getAllSecrets,
@@ -89,8 +89,8 @@ verifyEmptyMainBlock
     :: HasConfigurations => BlockProperty ()
 verifyEmptyMainBlock = do
     emptyBlock <- fst <$> bpGenBlock (EnableTxPayload False) (InplaceDB False)
-    curSlot <- getCurrentSlot
-    whenLeftM (lift $ verifyBlocksPrefix curSlot (one emptyBlock)) $
+    ctx <- run $ getVerifyBlocksContext' (either (const Nothing) Just . unEpochOrSlot . getEpochOrSlot $ emptyBlock)
+    whenLeftM (lift $ verifyBlocksPrefix ctx (one emptyBlock)) $
         stopProperty . pretty
 
 verifyValidBlocks
@@ -110,9 +110,10 @@ verifyValidBlocks = do
                     let (otherBlocks', _) = span isRight otherBlocks
                     in block0 :| otherBlocks'
 
+    ctx <- run $ getVerifyBlocksContext' (lastSlot blocks)
     verRes <-
         lift $ satisfySlotCheck blocksToVerify $
-        verifyBlocksPrefix Nothing blocksToVerify
+        verifyBlocksPrefix ctx blocksToVerify
     whenLeft verRes $
         stopProperty . pretty
 
@@ -128,10 +129,9 @@ verifyAndApplyBlocksSpec = do
     applier :: HasConfiguration => OldestFirst NE Blund -> BlockTestMode ()
     applier blunds = do
         let blocks = map fst blunds
+        ctx <- getVerifyBlocksContext' (lastSlot . IL.toList $ blocks)
         satisfySlotCheck blocks $
-           -- we don't check current SlotId, because the applier is run twice
-           -- and the check will fail the verification
-           whenLeftM (verifyAndApplyBlocks Nothing True blocks) throwM
+           whenLeftM (verifyAndApplyBlocks ctx True blocks) throwM
     applyByOneOrAllAtOnceDesc =
         "verifying and applying blocks one by one leads " <>
         "to the same GState as verifying and applying them all at once " <>

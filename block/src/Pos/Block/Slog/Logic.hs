@@ -37,9 +37,9 @@ import           Pos.Block.Logic.Integrity (verifyBlocks)
 import           Pos.Block.Slog.Context (slogGetLastSlots, slogPutLastSlots)
 import           Pos.Block.Slog.Types (HasSlogGState)
 import           Pos.Block.Types (Blund, SlogUndo (..), Undo (..))
-import           Pos.Core (BlockVersion (..), FlatSlotId, blkSecurityParam,
-                           difficultyL, epochIndexL, flattenSlotId, headerHash, headerHashG,
-                           prevBlockL)
+import           Pos.Core (BlockVersion (..), BlockVersionData, FlatSlotId,
+                           blkSecurityParam, difficultyL, epochIndexL, flattenSlotId, headerHash,
+                           headerHashG, prevBlockL)
 import           Pos.Core.Block (Block, genBlockLeaders, mainBlockSlot)
 import           Pos.DB (SomeBatchOp (..))
 import           Pos.DB.Block (putBlunds)
@@ -53,7 +53,6 @@ import           Pos.Lrc.Context (HasLrcContext, lrcActionOnEpochReason)
 import qualified Pos.Lrc.DB as LrcDB
 import           Pos.Slotting (SlotId, MonadSlots)
 import           Pos.Update.Configuration (HasUpdateConfiguration, lastKnownBlockVersion)
-import qualified Pos.Update.DB as GS (getAdoptedBVFull)
 import           Pos.Util (_neHead, _neLast)
 import           Pos.Util.AssertMode (inAssertMode)
 import           Pos.Util.Chrono (NE, NewestFirst (getNewestFirst), OldestFirst (..), toOldestFirst,
@@ -127,11 +126,12 @@ type MonadSlogVerify ctx m =
 slogVerifyBlocks
     :: MonadSlogVerify ctx m
     => Maybe SlotId -- ^ current slot
+    -> BlockVersion
+    -> BlockVersionData
     -> OldestFirst NE Block
     -> m (Either Text (OldestFirst NE SlogUndo))
-slogVerifyBlocks curSlot blocks = runExceptT $ do
-    (adoptedBV, adoptedBVD) <- lift GS.getAdoptedBVFull
-    let dataMustBeKnown = mustDataBeKnown adoptedBV
+slogVerifyBlocks curSlot bv bvData blocks = runExceptT $ do
+    let dataMustBeKnown = mustDataBeKnown bv
     let headEpoch = blocks ^. _Wrapped . _neHead . epochIndexL
     leaders <- lift $
         lrcActionOnEpochReason
@@ -150,7 +150,7 @@ slogVerifyBlocks curSlot blocks = runExceptT $ do
         _ -> pass
     -- Do pure block verification.
     verResToMonadError formatAllErrors $
-        verifyBlocks curSlot dataMustBeKnown adoptedBVD leaders blocks
+        verifyBlocks curSlot dataMustBeKnown bvData leaders blocks
     -- Here we need to compute 'SlogUndo'. When we apply a block,
     -- we can remove one of the last slots stored in 'BlockExtra'.
     -- This removed slot must be put into 'SlogUndo'.

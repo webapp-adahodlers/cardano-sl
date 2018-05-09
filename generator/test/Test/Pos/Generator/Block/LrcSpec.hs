@@ -18,7 +18,7 @@ import           Serokell.Util (listJson)
 import           Test.Hspec (Spec, describe)
 import           Test.Hspec.QuickCheck (modifyMaxSuccess, prop)
 import           Test.QuickCheck (Gen, arbitrary, choose)
-import           Test.QuickCheck.Monadic (pick)
+import           Test.QuickCheck.Monadic (pick, run)
 
 import           Pos.Binary.Class (serialize')
 import           Pos.Block.Logic (applyBlocksUnsafe)
@@ -33,6 +33,7 @@ import           Pos.Crypto (SecretKey, toPublic)
 import qualified Pos.GState as GS
 import           Pos.Launcher (HasConfigurations)
 import qualified Pos.Lrc as Lrc
+import           Pos.Update.DB (getAdoptedBVFull)
 import           Pos.Util.Util (getKeys)
 
 import           Test.Pos.Block.Logic.Mode (BlockProperty, TestParams (..), blockPropertyToProperty)
@@ -231,7 +232,8 @@ genAndApplyBlockFixedTxs txs = do
     let txPayload = mkTxPayload txs
     emptyBlund <- bpGenBlock (EnableTxPayload False) (InplaceDB False)
     let blund = emptyBlund & _1 . _Right . mainBlockTxPayload .~ txPayload
-    lift $ applyBlocksUnsafe (ShouldCallBListener False)(one blund) Nothing
+    (bv, bvd) <- run getAdoptedBVFull
+    lift $ applyBlocksUnsafe bv bvd (ShouldCallBListener False)(one blund) Nothing
 
 -- TODO: we can't change stake in bootstrap era!
 -- This part should be implemented in CSL-1450.

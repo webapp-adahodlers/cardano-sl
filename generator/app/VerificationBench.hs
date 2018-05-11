@@ -8,12 +8,11 @@ import qualified Data.List.NonEmpty as NE
 import qualified Data.Text as T
 import qualified Data.ByteString.Lazy as BSL
 import           Data.Time.Units (Microsecond, convertUnit)
-import           Formatting (sformat, shown, stext, (%))
-import qualified GHC.Exts as IL
+import           Formatting (sformat, shown, int, (%))
 import qualified Options.Applicative as Opts
 import           System.Directory (doesFileExist)
 import           System.Random (newStdGen)
-import           System.Wlog (LoggerName (..), LoggerConfig, consoleActionB, debugPlus, setupLogging, defaultHandleAction, termSeveritiesOutB, consoleActionB, logInfo, logDebug, logError)
+import           System.Wlog (LoggerName (..), LoggerConfig, consoleActionB, debugPlus, setupLogging, defaultHandleAction, termSeveritiesOutB, consoleActionB, logInfo, logError)
 
 import           Mockable.CurrentTime (realTime)
 
@@ -21,7 +20,7 @@ import           Pos.AllSecrets (mkAllSecretsSimple)
 import           Pos.Binary.Class (serialize, decodeFull)
 import           Pos.Block.Error (ApplyBlocksException, VerifyBlocksException)
 import           Pos.Block.Logic.VAR (getVerifyBlocksContext', verifyAndApplyBlocks, verifyBlocksPrefix, rollbackBlocks)
-import           Pos.Core (Block, headerHash)
+import           Pos.Core (Block)
 import           Pos.Core.Common (BlockCount (..), unsafeCoinPortionFromDouble)
 import           Pos.Core.Configuration (genesisBlockVersionData, genesisData, genesisSecretKeys)
 import           Pos.Core.Genesis (FakeAvvmOptions (..), GenesisData (..), GenesisInitializer (..), TestnetBalanceOptions (..))
@@ -204,14 +203,14 @@ main = do
                                 liftIO $ writeBlocks path bs
                                 return bs
 
-                logDebug $ sformat ("generated blocks:\n\t"%stext) $ T.intercalate "\n\t" $ map (show . headerHash) (IL.toList bs)
-                let bss = force $ replicate (baRuns args) bs
-
                 logInfo "Verifying blocks"
-                (times, errs) <- unzip <$> forM bss
-                    (if baApply args
-                        then validateAndApply
-                        else validate)
+                let bss = force $ zip ([1..] :: [Int]) $ replicate (baRuns args) bs
+                (times, errs) <- fmap unzip $ forM bss
+                    $ \(idx, blocks) -> do
+                        logInfo $ sformat ("Pass: "%int) idx
+                        (if baApply args
+                            then validateAndApply blocks
+                            else validate blocks)
 
                 let -- drop first three results (if there are more than three results)
                     itimes :: [Float]

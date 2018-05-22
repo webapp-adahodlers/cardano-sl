@@ -137,7 +137,8 @@ sanityCheckUtxo
     => Coin -> m ()
 sanityCheckUtxo expectedTotalStake = do
     let stakesSource =
-            mapOutput (map snd . txOutStake . toaOut . snd) utxoSource
+            mapOutput (map snd . txOutStake (gdBootStakeholders genesisData)
+                       . toaOut . snd) utxoSource
     calculatedTotalStake <-
         runConduitRes $ stakesSource .| CL.fold foldAdd (mkCoin 0)
     let fmt =

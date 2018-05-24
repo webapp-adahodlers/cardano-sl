@@ -10,13 +10,14 @@ import           Universum
 
 import           Test.QuickCheck (Arbitrary (..), listOf)
 
-import           Pos.Arbitrary.Core ()
 import           Pos.Arbitrary.Update.Core ()
 import           Pos.Binary.Update ()
 import           Pos.Core.Configuration (HasProtocolMagic, protocolMagic)
 import           Pos.Core.Update (UpdateProposal (..), UpdateVote (..), mkUpdateVote)
 import           Pos.Crypto (hash)
 import           Pos.Infra.Communication.Relay (DataMsg (..))
+
+import           Test.Pos.Core.Arbitrary ()
 
 instance HasProtocolMagic => Arbitrary (DataMsg UpdateVote) where
     arbitrary = DataMsg <$> arbitrary

@@ -21,9 +21,9 @@ import           System.Wlog (WithLogger, logDebug)
 import           Universum
 
 import           Pos.Binary.Ssc ()
-import           Pos.Core (BlockVersionData, ComponentBlock (..), HasCoreConfiguration, HasGenesisData,
-                           HasProtocolConstants, HasProtocolMagic, HeaderHash, epochIndexL,
-                           epochOrSlotG, headerHash)
+import           Pos.Core (BlockVersionData, ComponentBlock (..), HeaderHash, HasProtocolMagic,
+                           epochIndexL, epochOrSlotG, headerHash, HasGeneratedSecrets, HasGenesisBlockVersionData,
+                           HasCoreConfiguration, HasProtocolConstants, HasGenesisData)
 import           Pos.Core.Ssc (SscPayload (..))
 import           Pos.DB (MonadDBRead, MonadGState, SomeBatchOp (..))
 import           Pos.Exception (assertionFailed)
@@ -35,7 +35,7 @@ import           Pos.Ssc.Configuration (HasSscConfiguration)
 import qualified Pos.Ssc.DB as DB
 import           Pos.Ssc.Error (SscVerifyError (..), sscIsCriticalVerifyError)
 import           Pos.Ssc.Mem (MonadSscMem, SscGlobalUpdate, askSscMem, sscRunGlobalUpdate)
-import           Pos.Ssc.Toss (MultiRichmenStakes, PureToss, applyGenesisBlock, rollbackSsc,
+import           Pos.Ssc.Toss (PureToss, applyGenesisBlock, rollbackSsc,
                                runPureTossWithLogger, supplyPureTossEnv, verifyAndApplySscPayload)
 import           Pos.Ssc.Types (SscBlock, SscGlobalState (..), sscGlobal)
 import           Pos.Util.AssertMode (inAssertMode)
@@ -178,34 +178,16 @@ sscVerifyAndApplyBlocks
     -> BlockVersionData
     -> OldestFirst NE SscBlock
     -> m ()
-sscVerifyAndApplyBlocks richmenStake bvd blocks =
-    verifyAndApplyMultiRichmen False (richmenData, bvd) blocks
+sscVerifyAndApplyBlocks richmenStakes bvd blocks =
+    tossToVerifier . hoist (supplyPureTossEnv env) . mapM_ verifyAndApplyDo $ blocks
   where
     epoch = blocks ^. _Wrapped . _neHead . epochIndexL
-    richmenData = HM.fromList [(epoch, richmenStake)]
+    env = (HM.fromList [(epoch, richmenStakes)], bvd)
 
-verifyAndApplyMultiRichmen
-    :: (SscVerifyMode m, HasProtocolConstants, HasProtocolMagic, HasGenesisData)
-    => Bool
-    -> (MultiRichmenStakes, BlockVersionData)
-    -> OldestFirst NE SscBlock
-    -> m ()
-verifyAndApplyMultiRichmen onlyCerts env =
-    tossToVerifier . hoist (supplyPureTossEnv env) .
-    mapM_ verifyAndApplyDo
-  where
-    verifyAndApplyDo (ComponentBlockGenesis header) = applyGenesisBlock $ header ^. epochIndexL
-    verifyAndApplyDo (ComponentBlockMain header payload) =
-        verifyAndApplySscPayload (Right header) $
-        filterPayload payload
-    filterPayload payload
-        | onlyCerts = leaveOnlyCerts payload
-        | otherwise = payload
-    leaveOnlyCerts (CommitmentsPayload _ certs) =
-        CommitmentsPayload mempty certs
-    leaveOnlyCerts (OpeningsPayload _ certs) = OpeningsPayload mempty certs
-    leaveOnlyCerts (SharesPayload _ certs) = SharesPayload mempty certs
-    leaveOnlyCerts c@(CertificatesPayload _) = c
+    verifyAndApplyDo (ComponentBlockGenesis header)
+        = applyGenesisBlock $ header ^. epochIndexL
+    verifyAndApplyDo (ComponentBlockMain header payload)
+        = verifyAndApplySscPayload (Right header) payload
 
 ----------------------------------------------------------------------------
 -- Rollback

@@ -15,6 +15,7 @@ cabal-version:       >=1.10
 library
   exposed-modules:
                        Test.Pos.Core.Chrono
+                       Test.Pos.Core.CoreGenerators
 
   build-depends:       QuickCheck
                      , base
@@ -23,6 +24,7 @@ library
                      , cardano-sl-util
                      , cryptonite
                      , formatting
+                     , hedgehog
                      , hspec
                      , mtl
                      , quickcheck-instances

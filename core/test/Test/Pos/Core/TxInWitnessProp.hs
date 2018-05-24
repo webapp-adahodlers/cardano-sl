@@ -4,31 +4,27 @@ module Test.Pos.Core.TxInWitnessProp
 
 import           Universum
 
-import           Hedgehog ((===), checkParallel, discover, forAll, property, Property, withTests)
-import           Pos.Binary.Class (serialize)
-import           Test.Pos.Core.Tripping (trippingBiShow)
-import           Test.Pos.Core.CoreGenerators (genPkWit, genRedWit, genScriptWit, genUnkWit, pkWitness)
-
-
---import qualified Hedgehog as H
-import qualified Test.Pos.Util.Base16 as B16
+import           Hedgehog (checkParallel, discover, forAll, property
+                          , Property)
+import           Test.Pos.Binary.Tripping (embedGoldenTest, goldenTestBi,trippingBiShow)
+import           Test.Pos.Core.CoreGenerators ( genPkWit, genRedWit, genScriptWit, genUnkWit
+                                              , pkWitness, scrWitness, redWitness, unkWitness)
 
 -- | Golden tests
 
 ------------------------------------------------------------------------
 
-prop_golden_TestPkwitness :: Property
-prop_golden_TestPkwitness =
-    withTests 1 . property $
-        B16.encodeWithIndex (serialize pkWitness) ===  "00: 8200d8185885825840785643c0c26601\n\
-                                                       \10: 7dca29a455ff32f1d8f69b204dee9fbf\n\
-                                                       \20: 64437ea866e28550c8c0eb05b9cec98e\n\
-                                                       \30: 9af4705a82fc80c7f0fb1373d5b48701\n\
-                                                       \40: 9bd1b78ed5fa24dbee58406e7670626b\n\
-                                                       \50: 6a6f78706d656d6b6769636d71786469\n\
-                                                       \60: 78647772736268776474717868747a69\n\
-                                                       \70: 707a66776b6a7a7a6b7769666367737a\n\
-                                                       \80: 62716d666a797278727267\n"
+prop_golden_TestPkWitness :: Property
+prop_golden_TestPkWitness = goldenTestBi pkWitness $(embedGoldenTest "PkWitness")
+
+prop_golden_TestScrWitness :: Property
+prop_golden_TestScrWitness = goldenTestBi scrWitness $(embedGoldenTest "ScriptWitness")
+
+prop_golden_TestRedWitness :: Property
+prop_golden_TestRedWitness = goldenTestBi redWitness $(embedGoldenTest "RedeemWitness")
+
+prop_golden_TestUnkWitness :: Property
+prop_golden_TestUnkWitness = goldenTestBi unkWitness $(embedGoldenTest "UnknownWitness")
 
 
 -- | Round trip tests

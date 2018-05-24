@@ -34,11 +34,12 @@ import           System.Wlog (WithLogger)
 import           Pos.Binary.Core ()
 import           Pos.Block.BListener (MonadBListener (..))
 import           Pos.Block.Logic.Integrity (verifyBlocks)
+import           Pos.Block.Logic.Types (VerifyBlocksContext (..))
 import           Pos.Block.Slog.Context (slogGetLastSlots, slogPutLastSlots)
 import           Pos.Block.Slog.Types (HasSlogGState)
 import           Pos.Block.Types (Blund, SlogUndo (..), Undo (..))
-import           Pos.Core (BlockVersion (..), BlockVersionData, FlatSlotId,
-                           blkSecurityParam, difficultyL, epochIndexL, flattenSlotId, headerHash,
+import           Pos.Core (BlockVersion (..), FlatSlotId, blkSecurityParam,
+                           difficultyL, epochIndexL, flattenSlotId, headerHash,
                            headerHashG, prevBlockL)
 import           Pos.Core.Block (Block, genBlockLeaders, mainBlockSlot)
 import           Pos.DB (SomeBatchOp (..))
@@ -51,7 +52,7 @@ import           Pos.Exception (assertionFailed, reportFatalError)
 import qualified Pos.GState.BlockExtra as GS
 import           Pos.Lrc.Context (HasLrcContext, lrcActionOnEpochReason)
 import qualified Pos.Lrc.DB as LrcDB
-import           Pos.Slotting (SlotId, MonadSlots)
+import           Pos.Slotting (MonadSlots)
 import           Pos.Update.Configuration (HasUpdateConfiguration, lastKnownBlockVersion)
 import           Pos.Util (_neHead, _neLast)
 import           Pos.Util.AssertMode (inAssertMode)
@@ -125,13 +126,11 @@ type MonadSlogVerify ctx m =
 -- 3.  Compute 'SlogUndo's and return them.
 slogVerifyBlocks
     :: MonadSlogVerify ctx m
-    => Maybe SlotId -- ^ current slot
-    -> BlockVersion
-    -> BlockVersionData
+    => VerifyBlocksContext
     -> OldestFirst NE Block
     -> m (Either Text (OldestFirst NE SlogUndo))
-slogVerifyBlocks curSlot bv bvData blocks = runExceptT $ do
-    let dataMustBeKnown = mustDataBeKnown bv
+slogVerifyBlocks ctx blocks = runExceptT $ do
+    let dataMustBeKnown = mustDataBeKnown (vbcBlockVersion ctx)
     let headEpoch = blocks ^. _Wrapped . _neHead . epochIndexL
     leaders <- lift $
         lrcActionOnEpochReason
@@ -150,7 +149,12 @@ slogVerifyBlocks curSlot bv bvData blocks = runExceptT $ do
         _ -> pass
     -- Do pure block verification.
     verResToMonadError formatAllErrors $
-        verifyBlocks curSlot dataMustBeKnown bvData leaders blocks
+        verifyBlocks
+            (vbcCurrentSlot ctx)
+            dataMustBeKnown
+            (vbcBlockVersionData ctx)
+            leaders
+            blocks
     -- Here we need to compute 'SlogUndo'. When we apply a block,
     -- we can remove one of the last slots stored in 'BlockExtra'.
     -- This removed slot must be put into 'SlogUndo'.

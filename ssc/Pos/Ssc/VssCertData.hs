@@ -27,6 +27,7 @@ module Pos.Ssc.VssCertData
 
 import           Universum hiding (empty, filter)
 
+import           Control.DeepSeq (NFData)
 import           Control.Lens (makeLensesFor)
 import qualified Data.HashMap.Strict as HM
 import qualified Data.List as List
@@ -64,6 +65,8 @@ data VssCertData = VssCertData
       -- Set (full expired slot, (id, insertion slot, cert))
     , expiredCerts :: !(Set (EpochOrSlot, (StakeholderId, EpochOrSlot, VssCertificate)))
     } deriving (Generic, Show, Eq)
+
+instance NFData VssCertData
 
 flip makeLensesFor ''VssCertData
   [ ("lastKnownEoS", "_lastKnownEoS")

@@ -32,11 +32,10 @@ import           Pos.Block.Slog (scCQFixedMonitorState, scCQOverallMonitorState,
                                  scCrucialValuesLabel, scDifficultyMonitorState,
                                  scEpochMonitorState, scGlobalSlotMonitorState,
                                  scLocalSlotMonitorState, slogGetLastSlots)
-import           Pos.Core (BlockVersionData (..), ChainDifficulty, FlatSlotId, HasGeneratedSecrets,
-                           HasGenesisBlockVersionData, HasGenesisData, HasGenesisHash,
-                           HasProtocolConstants, HasProtocolMagic, SlotId (..),
-                           Timestamp (Timestamp), addressHash, blkSecurityParam, difficultyL,
-                           epochOrSlotToSlot, epochSlots, flattenSlotId, gbHeader, getEpochOrSlot,
+import           Pos.Core (BlockVersionData (..), ChainDifficulty, FlatSlotId,
+                           HasProtocolConstants, SlotId (..), Timestamp (Timestamp),
+                           addressHash, blkSecurityParam, difficultyL, epochOrSlotToSlot,
+                           epochSlots, flattenSlotId, gbHeader, getEpochOrSlot,
                            getOurPublicKey, getSlotIndex, slotIdF, unflattenSlotId)
 import           Pos.Core.Chrono (OldestFirst (..))
 import           Pos.Crypto (ProxySecretKey (pskDelegatePk))

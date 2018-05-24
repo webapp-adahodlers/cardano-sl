@@ -15,18 +15,24 @@ cabal-version:       >=1.10
 library
   exposed-modules:
                        Test.Pos.Core.Chrono
+                       Test.Pos.Core.CoreGenerators
 
   build-depends:       QuickCheck
                      , base
                      , bytestring
+                     , cardano-crypto
+                     , cardano-sl-crypto
                      , cardano-sl-core
                      , cardano-sl-util
                      , cryptonite
+                     , ed25519
                      , formatting
+                     , hedgehog
                      , hspec
                      , mtl
                      , quickcheck-instances
                      , tagged
+                     , text
                      , time-units
                      , universum
 

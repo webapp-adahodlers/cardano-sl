@@ -65,6 +65,7 @@ import           Pos.Network.Types (Bucket (..), NetworkConfig (..), NodeType,
                                     topologyRunKademlia, topologySubscribers,
                                     topologySubscriptionWorker)
 import           Pos.Reporting.Ekg (EkgNodeMetrics (..), registerEkgNodeMetrics)
+import           Pos.Reporting.Health.Types (HealthStatus)
 import           Pos.Ssc.Message (MCCommitment (..), MCOpening (..), MCShares (..),
                                   MCVssCertificate (..))
 import           Pos.Util.OutboundQueue (EnqueuedConversation (..))

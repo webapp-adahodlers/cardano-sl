@@ -22,9 +22,8 @@ import           Universum
 
 import           Pos.Binary.Ssc ()
 import           Pos.Core (BlockVersionData, ComponentBlock (..), HeaderHash, HasProtocolMagic,
-                           epochIndexL, epochOrSlotG, headerHash, HasGeneratedSecrets, HasGenesisBlockVersionData,
-                           HasCoreConfiguration, HasProtocolConstants, HasGenesisData)
-import           Pos.Core.Ssc (SscPayload (..))
+                           epochIndexL, epochOrSlotG, headerHash, HasCoreConfiguration,
+                           HasProtocolConstants, HasGenesisData)
 import           Pos.DB (MonadDBRead, MonadGState, SomeBatchOp (..))
 import           Pos.Exception (assertionFailed)
 import           Pos.Lrc.Consumer.Ssc (getSscRichmen)

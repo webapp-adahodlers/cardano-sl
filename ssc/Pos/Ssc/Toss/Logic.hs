@@ -22,7 +22,7 @@ import           Pos.Core (EpochIndex, EpochOrSlot (..), IsMainHeader, HasProtoc
                            mkVssCertificatesMapSingleton, slotSecurityParam)
 import           Pos.Core.Ssc (CommitmentsMap (..), InnerSharesMap, Opening, SignedCommitment,
                                SscPayload (..), getCommitmentsMap, mkCommitmentsMapUnsafe, spVss,
-                               checkSscPayload)
+                               checkSscVssPayload)
 import           Pos.Crypto.Configuration (protocolMagic)
 import           Pos.Ssc.Error (SscVerifyError (..))
 import           Pos.Ssc.Functions (verifySscPayload)
@@ -38,17 +38,26 @@ import           Pos.Util.Util (sortWithMDesc)
 -- MonadToss. If data is valid it is also applied.  Otherwise
 -- SscVerifyError is thrown using 'MonadError' type class.
 verifyAndApplySscPayload
-    :: (MonadToss m, MonadTossEnv m,
-        MonadError SscVerifyError m, MonadRandom m, HasProtocolConstants, HasProtocolMagic)
-    => Either EpochIndex (Some IsMainHeader) -> SscPayload -> m ()
+    :: ( HasProtocolConstants
+       , HasProtocolMagic
+       , MonadError SscVerifyError m
+       , MonadRandom m
+       , MonadToss m
+       , MonadTossEnv m
+       )
+    => Either EpochIndex (Some IsMainHeader)
+    -> SscPayload
+    -> m ()
 verifyAndApplySscPayload eoh payload = do
     -- Check the payload for internal consistency.
-    either (throwError . SscInvalidPayload) pure (checkSscPayload protocolMagic payload)
+    either (throwError . SscInvalidPayload) pure (checkSscVssPayload protocolMagic payload)
     -- We can't trust payload from mempool, so we must call
     -- @verifySscPayload@.
     whenLeft eoh $ const $ verifySscPayload eoh payload
     -- We perform @verifySscPayload@ for block when we construct it
     -- (in the 'recreateGenericBlock').  So this check is just in case.
+    -- NOTE: in block verification `verifySscPayload` on `MainBlock` is run
+    -- by `Pos.Block.BHelper.verifyMainBlock`
     inAssertMode $
         whenRight eoh $ const $ verifySscPayload eoh payload
     let blockCerts = spVss payload

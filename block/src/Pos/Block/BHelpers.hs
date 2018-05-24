@@ -33,7 +33,6 @@ import           Pos.Core.Class (IsMainHeader (..))
 import           Pos.Core.Configuration (HasProtocolConstants, HasProtocolMagic, protocolMagic)
 import           Pos.Core.Delegation (LightDlgIndices (..), checkDlgPayload)
 import           Pos.Core.Slotting (SlotId (..))
-import           Pos.Core.Ssc (checkSscPayload)
 import           Pos.Core.Txp (checkTxPayload)
 import           Pos.Core.Update (checkSoftwareVersion, checkUpdatePayload)
 import           Pos.Crypto (ProxySignature (..), SignTag (..), checkSig, hash, isSelfSignedPsk,
@@ -108,7 +107,9 @@ verifyMainBody
     -> m ()
 verifyMainBody MainBody {..} = do
     checkTxPayload _mbTxPayload
-    checkSscPayload protocolMagic _mbSscPayload
+    -- Note:  `checkSscVssPayload` is done by `sscVerifyBlocks` in
+    -- `verifyAndApplySscPayload`, but it also performs
+    -- `Pos.Ssc.Toss.Logic.checkPaylaod` which require `MonadRandom` constraint.
     checkDlgPayload protocolMagic _mbDlgPayload
     checkUpdatePayload protocolMagic _mbUpdatePayload
 

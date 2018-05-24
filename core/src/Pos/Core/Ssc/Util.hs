@@ -7,7 +7,7 @@ module Pos.Core.Ssc.Util
          getCommShares
        , mkSscProof
 
-       , checkSscPayload
+       , checkSscVssPayload
        ) where
 
 import           Universum
@@ -50,9 +50,9 @@ mkSscProof payload =
     proof constr hm (getVssCertificatesMap -> certs) =
         constr (hash hm) (hash certs)
 
-checkSscPayload
+checkSscVssPayload
     :: ( MonadError Text m, Bi EpochIndex )
     => ProtocolMagic
     -> SscPayload
     -> m ()
-checkSscPayload pm payload = checkVssCertificatesMap pm (spVss payload)
+checkSscVssPayload pm payload = checkVssCertificatesMap pm (spVss payload)

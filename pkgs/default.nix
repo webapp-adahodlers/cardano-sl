@@ -17349,6 +17349,7 @@ log-warper
 mtl
 QuickCheck
 quickcheck-instances
+reflection
 safe-exceptions
 serokell-util
 servant

@@ -417,6 +417,7 @@ test-suite wallet-unit-tests
                     , mtl
                     , QuickCheck
                     , quickcheck-instances
+                    , reflection
                     , serokell-util
                     , text
                     , text-format

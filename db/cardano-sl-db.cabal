@@ -54,7 +54,8 @@ library
 
   default-language:    Haskell2010
 
-  default-extensions:  DeriveDataTypeable
+  default-extensions:  DataKinds
+                       DeriveDataTypeable
                        DeriveGeneric
                        GeneralizedNewtypeDeriving
                        StandaloneDeriving

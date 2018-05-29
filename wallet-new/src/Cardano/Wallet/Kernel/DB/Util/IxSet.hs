@@ -15,12 +15,14 @@ module Cardano.Wallet.Kernel.DB.Util.IxSet (
   , ixList
     -- * Queries
   , getEQ
+  , getOne
   , member
   , size
     -- * Construction
   , fromList
   , omap
   , otraverse
+  , emptyIxSet
   ) where
 
 import           Universum hiding (Foldable)
@@ -139,6 +141,9 @@ instance Foldable IxSet where
 getEQ :: (Indexable a, IsIndexOf ix a) => ix -> IxSet a -> IxSet a
 getEQ ix = WrapIxSet . IxSet.getEQ ix . unwrapIxSet
 
+getOne :: Indexable a => IxSet a -> Maybe a
+getOne xs = unwrapOrdByPrimKey <$> (IxSet.getOne . unwrapIxSet) xs
+
 member :: (HasPrimKey a, Indexable a) => PrimKey a -> IxSet a -> Bool
 member pk = isJust . view (Lens.at pk)
 
@@ -171,3 +176,8 @@ omap f =
 otraverse :: (Applicative f, Indexable a)
           => (a -> f a) -> IxSet a -> f (IxSet a)
 otraverse f = fmap fromList . Data.Traversable.traverse f . Data.Foldable.toList
+
+emptyIxSet :: forall a.
+              Indexable a
+           => IxSet a
+emptyIxSet = WrapIxSet IxSet.empty

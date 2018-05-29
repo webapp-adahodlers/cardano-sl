@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds          #-}
 {-# LANGUAGE RankNTypes         #-}
 {-# LANGUAGE StandaloneDeriving #-}
 
@@ -15,6 +16,7 @@ import           Data.Map.Strict (Map)
 import           Formatting (Format, stext)
 import           GHC.Generics (Generic)
 
+import           Pos.Binary.Class (DecoderAttrKind (..))
 import           Pos.Communication.Types.Protocol (NodeId)
 import           Pos.Core (HeaderHash, ProxySKHeavy)
 import           Pos.Core.Block (Block, BlockHeader, MainBlockHeader)
@@ -47,12 +49,12 @@ data Diffusion m = Diffusion
       getBlocks          :: NodeId
                          -> HeaderHash
                          -> [HeaderHash]
-                         -> m (OldestFirst [] Block)
+                         -> m (OldestFirst [] (Block 'AttrExtRep))
       -- | This is needed because there's a security worker which will request
       -- tip-of-chain from the network if it determines it's very far behind.
-    , requestTip          :: m (Map NodeId (m BlockHeader))
+    , requestTip          :: m (Map NodeId (m (BlockHeader 'AttrExtRep)))
       -- | Announce a block header.
-    , announceBlockHeader :: MainBlockHeader -> m ()
+    , announceBlockHeader :: forall attr. MainBlockHeader attr -> m ()
       -- | Returns a Bool iff at least one peer accepted the transaction.
       -- I believe it's for the benefit of wallets who wish to know that the
       -- transaction has a hope of making it into a block.

@@ -16,6 +16,7 @@ import           Pos.Communication.Protocol (ConversationActions, HandlerSpec (.
                                              ListenerSpec (..), Message, NodeId, OutSpecs,
                                              VerInfo (..), checkProtocolMagic, checkingInSpecs,
                                              messageCode)
+import           Pos.Communication.BiP (biSerIO)
 import           Pos.Network.Types (Bucket)
 import           Pos.Util.Trace (Trace, Severity)
 
@@ -37,7 +38,7 @@ listenerConv logTrace oq h = (lspec, mempty)
     spec = (rcvMsgCode, ConvHandler sndMsgCode)
     lspec =
       flip ListenerSpec spec $ \ourVerInfo ->
-          N.Listener $ \peerVerInfo' nNodeId conv -> checkProtocolMagic ourVerInfo peerVerInfo' $ do
+          N.Listener biSerIO biSerIO $ \peerVerInfo' nNodeId conv -> checkProtocolMagic ourVerInfo peerVerInfo' $ do
               OQ.clearFailureOf oq nNodeId
               checkingInSpecs logTrace ourVerInfo peerVerInfo' spec nNodeId $
                   h ourVerInfo nNodeId conv

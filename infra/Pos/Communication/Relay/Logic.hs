@@ -38,6 +38,7 @@ import           Node.Message.Class (Message)
 import           Universum
 
 import           Pos.Binary.Class (Bi (..))
+import           Pos.Communication.BiP (biSerIO)
 import           Pos.Communication.Limits.Instances (mlResMsg, mlReqMsg, mlInvMsg,
                                                      mlDataMsg, mlMempoolMsg)
 import           Pos.Communication.Limits.Types (Limit, mlEither)
@@ -203,12 +204,12 @@ propagateData logTrace enqueue pm = waitForDequeues <$> case pm of
         traceWith logTrace (Debug, sformat
             ("Propagation data with key: "%build) key)
         enqueue msg $ \peer _ ->
-            pure $ Conversation $ (void <$> invReqDataFlowDo logTrace "propagation" key contents peer)
+            pure $ Conversation biSerIO biSerIO $ (void <$> invReqDataFlowDo logTrace "propagation" key contents peer)
     DataOnlyPM msg contents -> do
         traceWith logTrace (Debug, sformat
             ("Propagation data: "%build) contents)
         enqueue msg $ \__node _ ->
-            pure $ Conversation $ doHandler contents
+            pure $ Conversation biSerIO biSerIO $ doHandler contents
 
   where
 
@@ -375,7 +376,7 @@ dataFlow
     => Trace IO (Severity, Text) -> Text -> EnqueueMsg -> Msg -> contents -> IO ()
 dataFlow logTrace what enqueue msg dt = handleAny handleE $ do
     its <- enqueue msg $
-        \_ _ -> pure $ Conversation $ \(conv :: ConversationActions (DataMsg contents) Void) ->
+        \_ _ -> pure $ Conversation biSerIO biSerIO $ \(conv :: ConversationActions (DataMsg contents) Void) ->
             send conv $ DataMsg dt
     void $ waitForConversations (waitForDequeues its)
   where
@@ -455,7 +456,7 @@ invReqDataFlow
     -> IO (Map NodeId (Either SomeException (Maybe (ResMsg key))))
 invReqDataFlow logTrace what enqueue msg key dt = handleAny handleE $ do
     its <- enqueue msg $
-        \addr _ -> pure $ Conversation $ invReqDataFlowDo logTrace what key dt addr
+        \addr _ -> pure $ Conversation biSerIO biSerIO $ invReqDataFlowDo logTrace what key dt addr
     waitForConversations (try <$> waitForDequeues its)
   where
     -- TODO: is this function really special that it wants to catch

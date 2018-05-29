@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds            #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 -- | Binary serialization of core block types.
@@ -10,7 +11,9 @@ import           Codec.CBOR.Decoding (decodeWordCanonical)
 import           Codec.CBOR.Encoding (encodeWord)
 import           Universum
 
-import           Pos.Binary.Class (Bi (..), decodeListLenCanonicalOf, encodeListLen, enforceSize)
+import           Pos.Binary.Class (Bi (..), DecoderAttr (..), DecoderAttrKind (..),
+                                   decodeListLenCanonicalOf, encodeListLen,
+                                   enforceSize)
 import           Pos.Binary.Core.Block ()
 import           Pos.Binary.Core.Common ()
 import qualified Pos.Core.Block.Blockchain as T
@@ -24,7 +27,7 @@ instance ( Typeable b
          , Bi (T.ConsensusData b)
          , Bi (T.ExtraHeaderData b)
          ) =>
-         Bi (T.GenericBlockHeader b) where
+         Bi (T.GenericBlockHeader b 'AttrNone) where
     encode bh =  encodeListLen 5
               <> encode (getProtocolMagic (T._gbhProtocolMagic bh))
               <> encode (T._gbhPrevBlock bh)
@@ -38,6 +41,7 @@ instance ( Typeable b
         _gbhBodyProof <- decode
         _gbhConsensus <- decode
         _gbhExtra     <- decode
+        let _gbhDecoderAttr = DecoderAttrNone
         pure T.UnsafeGenericBlockHeader {..}
 
 instance ( Typeable b
@@ -48,7 +52,7 @@ instance ( Typeable b
          , Bi (T.Body b)
          , Bi (T.ExtraBodyData b)
          ) =>
-         Bi (T.GenericBlock b) where
+         Bi (T.GenericBlock b 'AttrNone) where
     encode gb =  encodeListLen 3
               <> encode (T._gbHeader gb)
               <> encode (T._gbBody gb)
@@ -58,13 +62,14 @@ instance ( Typeable b
         _gbHeader <- decode
         _gbBody   <- decode
         _gbExtra  <- decode
+        let _gbDecoderAttr = DecoderAttrNone
         pure T.UnsafeGenericBlock {..}
 
 ----------------------------------------------------------------------------
 -- BlockHeader
 ----------------------------------------------------------------------------
 
-instance Bi BlockHeader where
+instance Bi (BlockHeader 'AttrNone) where
    encode x = encodeListLen 2 <> encodeWord tag <> body
      where
        (tag, body) = case x of

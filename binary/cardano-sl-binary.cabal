@@ -28,6 +28,7 @@ library
                      , bytestring
                      , cborg
                      , containers
+                     , deepseq
                      , digest
                      , formatting
                      , half

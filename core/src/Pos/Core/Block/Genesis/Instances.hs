@@ -20,25 +20,24 @@ import           Pos.Core.Block.Blockchain (GenericBlock (..), GenericBlockHeade
 import           Pos.Core.Block.Genesis.Lens (gcdDifficulty, gcdEpoch)
 import           Pos.Core.Block.Genesis.Types (GenesisBody (..), GenesisConsensusData (..))
 import           Pos.Core.Block.Union.Types (BlockHeader (..), GenesisBlock, GenesisBlockHeader,
-                                             HeaderHash, blockHeaderHash)
+                                             HeaderHash, blockHeaderHash, headerHashHexF)
 import           Pos.Core.Class (HasDifficulty (..), HasEpochIndex (..), HasEpochOrSlot (..),
                                  HasHeaderHash (..), IsGenesisHeader, IsHeader)
 import           Pos.Core.Common (slotLeadersF)
 import           Pos.Core.Slotting.Types (EpochOrSlot (..))
-import           Pos.Crypto (hashHexF)
 
-instance NFData GenesisBlock
+instance NFData (GenesisBlock attr)
 
 ----------------------------------------------------------------------------
 -- Buildable
 ----------------------------------------------------------------------------
 
-instance Bi BlockHeader => Buildable GenesisBlockHeader where
+instance Bi (BlockHeader attr) => Buildable (GenesisBlockHeader attr) where
     build gbh@UnsafeGenericBlockHeader {..} =
         bprint
             ("GenesisBlockHeader:\n"%
-             "    hash: "%hashHexF%"\n"%
-             "    previous block: "%hashHexF%"\n"%
+             "    hash: "%headerHashHexF%"\n"%
+             "    previous block: "%headerHashHexF%"\n"%
              "    epoch: "%build%"\n"%
              "    difficulty: "%int%"\n"
             )
@@ -51,7 +50,7 @@ instance Bi BlockHeader => Buildable GenesisBlockHeader where
         gbhHeaderHash = blockHeaderHash $ BlockHeaderGenesis gbh
         GenesisConsensusData {..} = _gbhConsensus
 
-instance Bi BlockHeader => Buildable GenesisBlock where
+instance Bi (BlockHeader attr) => Buildable (GenesisBlock attr) where
     build UnsafeGenericBlock {..} =
         bprint
             (stext%":\n"%
@@ -71,38 +70,38 @@ instance Bi BlockHeader => Buildable GenesisBlock where
 -- Pos.Core.Class
 ----------------------------------------------------------------------------
 
-instance HasEpochIndex GenesisBlock where
+instance HasEpochIndex (GenesisBlock attr) where
     epochIndexL = gbHeader . gbhConsensus . gcdEpoch
 
-instance HasEpochIndex GenesisBlockHeader where
+instance HasEpochIndex (GenesisBlockHeader attr) where
     epochIndexL = gbhConsensus . gcdEpoch
 
-instance HasEpochOrSlot GenesisBlockHeader where
+instance HasEpochOrSlot (GenesisBlockHeader attr) where
     getEpochOrSlot = EpochOrSlot . Left . _gcdEpoch . _gbhConsensus
 
-instance HasEpochOrSlot GenesisBlock where
+instance HasEpochOrSlot (GenesisBlock attr) where
     getEpochOrSlot = getEpochOrSlot . _gbHeader
 
 -- NB. it's not a mistake that these instances require @Bi BlockHeader@
 -- instead of @Bi GenesisBlockHeader@. We compute header's hash by
 -- converting it to a BlockHeader first.
 
-instance Bi BlockHeader =>
-         HasHeaderHash GenesisBlockHeader where
+instance Bi (BlockHeader attr) =>
+         HasHeaderHash (GenesisBlockHeader attr) where
     headerHash = blockHeaderHash . BlockHeaderGenesis
 
-instance Bi BlockHeader =>
-         HasHeaderHash GenesisBlock where
+instance Bi (BlockHeader attr) =>
+         HasHeaderHash (GenesisBlock attr) where
     headerHash = blockHeaderHash . BlockHeaderGenesis . _gbHeader
 
 instance HasDifficulty GenesisConsensusData where
     difficultyL = gcdDifficulty
 
-instance HasDifficulty GenesisBlockHeader where
+instance HasDifficulty (GenesisBlockHeader attr) where
     difficultyL = gbhConsensus . difficultyL
 
-instance HasDifficulty GenesisBlock where
+instance HasDifficulty (GenesisBlock attr) where
     difficultyL = gbHeader . difficultyL
 
-instance Bi BlockHeader => IsHeader GenesisBlockHeader
-instance Bi BlockHeader => IsGenesisHeader GenesisBlockHeader
+instance Bi (BlockHeader attr) => IsHeader (GenesisBlockHeader attr)
+instance Bi (BlockHeader attr) => IsGenesisHeader (GenesisBlockHeader attr)

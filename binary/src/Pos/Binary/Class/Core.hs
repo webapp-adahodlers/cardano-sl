@@ -1,3 +1,6 @@
+{-# LANGUAGE DeriveAnyClass   #-}
+{-# LANGUAGE DataKinds        #-}
+{-# LANGUAGE GADTs            #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeFamilies     #-}
 {-# LANGUAGE TypeOperators    #-}
@@ -10,6 +13,9 @@ module Pos.Binary.Class.Core
     , decodeBinary
     , enforceSize
     , matchSize
+    , ByteOffset
+    , DecoderAttrKind (..)
+    , DecoderAttr(..)
     -- * CBOR re-exports
     , E.encodeListLen
     , D.decodeListLenCanonical
@@ -34,6 +40,7 @@ import qualified Codec.CBOR.Decoding as D
 import qualified Codec.CBOR.Encoding as E
 import qualified Codec.CBOR.Read as CBOR.Read
 import qualified Codec.CBOR.Write as CBOR.Write
+import           Control.DeepSeq (NFData)
 import qualified Data.Binary as Binary
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BS.Lazy
@@ -81,6 +88,29 @@ matchSize :: Int -> Text -> Int -> D.Decoder s ()
 matchSize requestedSize lbl actualSize =
   when (actualSize /= requestedSize) $
     cborError (lbl <> " failed the size check. Expected " <> show requestedSize <> ", found " <> show actualSize)
+
+-- |
+-- Kind used to annotate types denoting how to decode them.
+data DecoderAttrKind
+    = AttrNone     -- ^ No attributes
+    | AttrOffsets  -- ^ Attribute with byte range from the decoder
+    | AttrExtRep   -- ^ Attribute with external representation
+
+type ByteOffset = Word
+
+-- | An optional attribute, where the type determines which attribute.
+data DecoderAttr (attr :: DecoderAttrKind) where
+  DecoderAttrNone    ::                             DecoderAttr 'AttrNone
+  DecoderAttrOffsets :: ByteOffset -> ByteOffset -> DecoderAttr 'AttrOffsets
+  DecoderAttrExtRep  :: ByteString ->               DecoderAttr 'AttrExtRep
+
+deriving instance Show (DecoderAttr attr)
+deriving instance Eq (DecoderAttr attr)
+deriving instance (Typeable attr) => Typeable (DecoderAttr attr)
+instance NFData (DecoderAttr attr) where
+    rnf DecoderAttrNone = ()
+    rnf (DecoderAttrOffsets !_ !_) = ()
+    rnf (DecoderAttrExtRep !_) = ()
 
 ----------------------------------------
 

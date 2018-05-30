@@ -11,6 +11,8 @@
 , ghcRuntimeArgs ? "-N2 -qg -A1m -I0 -T"
 , additionalNodeArgs ? ""
 , keepAlive ? true
+, launchGenesis ? false
+, configurationKey ? "default"
 }:
 
 with localLib;
@@ -41,13 +43,20 @@ let
       fallbacks = 1;
     };
   });
-  configFiles = pkgs.runCommand "cardano-config" {} ''
-    mkdir -pv $out
-    cd $out
-    cp -vi ${iohkPkgs.cardano-sl.src + "/configuration.yaml"} configuration.yaml
-    cp -vi ${iohkPkgs.cardano-sl.src + "/mainnet-genesis-dryrun-with-stakeholders.json"} mainnet-genesis-dryrun-with-stakeholders.json
-    cp -vi ${iohkPkgs.cardano-sl.src + "/mainnet-genesis.json"} mainnet-genesis.json
-  '';
+  configFiles = if launchGenesis
+    then
+      import ../../prepare-genesis {
+        inherit config system pkgs gitrev;
+        configurationKey = "testnet_full";
+        configurationKeyLaunch = "testnet_launch";
+      }
+    else pkgs.runCommand "cardano-config" {} ''
+      mkdir -pv $out
+      cd $out
+      cp -vi ${iohkPkgs.cardano-sl.src + "/configuration.yaml"} configuration.yaml
+      cp -vi ${iohkPkgs.cardano-sl.src + "/mainnet-genesis-dryrun-with-stakeholders.json"} mainnet-genesis-dryrun-with-stakeholders.json
+      cp -vi ${iohkPkgs.cardano-sl.src + "/mainnet-genesis.json"} mainnet-genesis.json
+    '';
 in pkgs.writeScript "demo-cluster" ''
   #!${pkgs.stdenv.shell}
   export PATH=${pkgs.lib.makeBinPath demoClusterDeps}
@@ -85,13 +94,13 @@ in pkgs.writeScript "demo-cluster" ''
   rm -rf ${stateDir}
   mkdir -p ${stateDir}
   echo "Creating genesis keys..."
-  cardano-keygen --system-start 0 generate-keys-by-spec --genesis-out-dir ${stateDir}/genesis-keys --configuration-file ${configFiles}/configuration.yaml
+  cardano-keygen --system-start 0 generate-keys-by-spec --genesis-out-dir ${stateDir}/genesis-keys --configuration-file ${configFiles}/configuration.yaml --configuration-key ${configurationKey}
 
   trap "stop_cardano" INT TERM
   echo "Launching a demo cluster..."
   for i in {1..${builtins.toString numCoreNodes}}
   do
-    node_args="--db-path ${stateDir}/core-db''${i} --rebuild-db --genesis-secret ''${i} --listen 127.0.0.1:300''${i} --json-log ${stateDir}/logs/node''${i}.json --logs-prefix ${stateDir}/logs --system-start $system_start --metrics +RTS -N2 -qg -A1m -I0 -T -RTS --node-id core''${i} --topology ${topologyFile} --configuration-file ${configFiles}/configuration.yaml"
+    node_args="--db-path ${stateDir}/core-db''${i} --rebuild-db --genesis-secret ''${i} --listen 127.0.0.1:300''${i} --json-log ${stateDir}/logs/node''${i}.json --logs-prefix ${stateDir}/logs --system-start $system_start --metrics +RTS -N2 -qg -A1m -I0 -T -RTS --node-id core''${i} --topology ${topologyFile} --configuration-file ${configFiles}/configuration.yaml" --configuration-key ${configurationKey}
     echo Launching core node $i with args: $node_args
     cardano-node-simple $node_args &> /dev/null &
     core_pid[$i]=$!
@@ -108,7 +117,7 @@ in pkgs.writeScript "demo-cluster" ''
   ${ifWallet ''
     export LC_ALL=C.UTF-8
     echo Launching wallet node: ${demoWallet}
-    ${demoWallet} --runtime-args "--system-start $system_start" &> /dev/null &
+    ${demoWallet} --runtime-args "--system-start $system_start --configuration-key ${configurationKey}" &> /dev/null &
     wallet_pid=$!
   ''}
   # Query node info until synced

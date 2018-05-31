@@ -1,5 +1,8 @@
-{-# LANGUAGE DataKinds            #-}
-{-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE InstanceSigs          #-}
+{-# LANGUAGE PartialTypeSignatures #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+{-# OPTIONS_GHC -fno-warn-orphans  #-}
 
 -- | Binary serialization of core block types.
 
@@ -7,13 +10,13 @@ module Pos.Binary.Core.Blockchain
        (
        ) where
 
-import           Codec.CBOR.Decoding (decodeWordCanonical)
+import           Codec.CBOR.Decoding (Decoder, decodeWordCanonical, peekByteOffset)
 import           Codec.CBOR.Encoding (encodeWord)
 import           Universum
 
-import           Pos.Binary.Class (Bi (..), DecoderAttr (..), DecoderAttrKind (..),
+import           Pos.Binary.Class (Bi (..), BiExtRep (..), DecoderAttr (..), DecoderAttrKind (..),
                                    decodeListLenCanonicalOf, encodeListLen,
-                                   enforceSize)
+                                   enforceSize, spliceExtRep')
 import           Pos.Binary.Core.Block ()
 import           Pos.Binary.Core.Common ()
 import qualified Pos.Core.Block.Blockchain as T
@@ -49,6 +52,24 @@ instance ( Typeable b
          , Bi (T.BodyProof b)
          , Bi (T.ConsensusData b)
          , Bi (T.ExtraHeaderData b)
+         ) =>
+         BiExtRep (T.GenericBlockHeader b) where
+    spliceExtRep bs h =
+        T.gbhDecoderAttr .~ (spliceExtRep' bs $ T._gbhDecoderAttr h) $ h
+    forgetExtRep = T.gbhDecoderAttr .~ DecoderAttrNone
+
+    decodeWithOffsets :: forall s. Decoder s (T.GenericBlockHeader b 'AttrOffsets)
+    decodeWithOffsets = do
+        start <- peekByteOffset
+        bh <- decode @(T.GenericBlockHeader b 'AttrNone)
+        end <- peekByteOffset
+        return $ T.gbhDecoderAttr .~ (DecoderAttrOffsets start end) $ bh
+
+instance ( Typeable b
+         , Bi (T.BHeaderHash b)
+         , Bi (T.BodyProof b)
+         , Bi (T.ConsensusData b)
+         , Bi (T.ExtraHeaderData b)
          , Bi (T.Body b)
          , Bi (T.ExtraBodyData b)
          ) =>
@@ -64,6 +85,37 @@ instance ( Typeable b
         _gbExtra  <- decode
         let _gbDecoderAttr = DecoderAttrNone
         pure T.UnsafeGenericBlock {..}
+
+instance ( Typeable b
+         , Bi (T.BHeaderHash b)
+         , Bi (T.BodyProof b)
+         , Bi (T.ConsensusData b)
+         , Bi (T.ExtraHeaderData b)
+         , Bi (T.Body b)
+         , Bi (T.ExtraBodyData b)
+         ) =>
+         BiExtRep (T.GenericBlock b) where
+    spliceExtRep bs (T.UnsafeGenericBlock {..}) =
+        T.UnsafeGenericBlock
+            (spliceExtRep bs $ _gbHeader)
+            (_gbBody)
+            (_gbExtra)
+            (spliceExtRep' bs _gbDecoderAttr)
+    forgetExtRep (T.UnsafeGenericBlock {..})
+        = T.UnsafeGenericBlock
+            (forgetExtRep _gbHeader)
+            _gbBody
+            _gbExtra
+            DecoderAttrNone
+
+    decodeWithOffsets = do
+        start <- peekByteOffset
+        _gbHeader <- decodeWithOffsets
+        _gbBody   <- decode
+        _gbExtra  <- decode
+        end <- peekByteOffset
+        let _gbDecoderAttr = DecoderAttrOffsets start end
+        return $ T.UnsafeGenericBlock {..}
 
 ----------------------------------------------------------------------------
 -- BlockHeader

@@ -93,8 +93,14 @@ in pkgs.writeScript "demo-cluster" ''
   # Remove previous state
   rm -rf ${stateDir}
   mkdir -p ${stateDir}
-  echo "Creating genesis keys..."
-  cardano-keygen --system-start 0 generate-keys-by-spec --genesis-out-dir ${stateDir}/genesis-keys --configuration-file ${configFiles}/configuration.yaml --configuration-key ${configurationKey}
+
+  ${if launchGenesis then ''
+    echo "Copying genesis keys..."
+    cp -Rv ${configFiles}/genesis-keys ${stateDir}
+  '' else ''
+    echo "Creating genesis keys..."
+    cardano-keygen --system-start 0 generate-keys-by-spec --genesis-out-dir ${stateDir}/genesis-keys --configuration-file ${configFiles}/configuration.yaml --configuration-key ${configurationKey}
+  ''}
 
   trap "stop_cardano" INT TERM
   echo "Launching a demo cluster..."

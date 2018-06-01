@@ -22,8 +22,8 @@ parseArgs = getArgs >>= \case
   _ -> die "usage: genesis-hash INFILE.json"
 
 readJSON :: Maybe FilePath -> IO JSValue
-readJSON f = do
-  bs <- case f of
+readJSON mf = do
+  bs <- case mf of
     Just f -> L8.readFile f
     Nothing -> L8.hGetContents stdin
   case parseCanonicalJSON bs of

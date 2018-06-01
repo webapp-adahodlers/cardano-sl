@@ -15772,6 +15772,41 @@ description = "Cardano SL - infrastructural";
 license = stdenv.lib.licenses.mit;
 
 }) {};
+"cardano-sl-infra-test" = callPackage
+({
+  mkDerivation
+, base
+, bytestring
+, cardano-sl-core
+, cardano-sl-infra
+, hedgehog
+, kademlia
+, memory
+, stdenv
+, time-units
+, universum
+}:
+mkDerivation {
+
+pname = "cardano-sl-infra-test";
+version = "1.1.0";
+src = ./../infra/test;
+libraryHaskellDepends = [
+base
+bytestring
+cardano-sl-core
+cardano-sl-infra
+hedgehog
+kademlia
+memory
+time-units
+universum
+];
+doHaddock = false;
+description = "Cardano SL - generators for cardano-sl-infra";
+license = stdenv.lib.licenses.mit;
+
+}) {};
 "cardano-sl-lrc" = callPackage
 ({
   mkDerivation
@@ -40063,6 +40098,7 @@ license = stdenv.lib.licenses.mit;
 , primitive
 , random
 , resourcet
+, semigroups
 , stdenv
 , stm
 , template-haskell
@@ -40077,10 +40113,8 @@ license = stdenv.lib.licenses.mit;
 mkDerivation {
 
 pname = "hedgehog";
-version = "0.5";
-sha256 = "f3caf8b249012727dc2328b0b595575898f1f2287967748de44fe6caab2bbe09";
-revision = "1";
-editedCabalFile = "13079sdirdzch3r199lyxa7xrcq4xpaayxhdvg8v0d27w9z1chln";
+version = "0.6";
+sha256 = "b86ffe3cf523d40e77f1547ef79d45edb62762e15328e8152959c440f7237e30";
 libraryHaskellDepends = [
 ansi-terminal
 async
@@ -40098,6 +40132,7 @@ pretty-show
 primitive
 random
 resourcet
+semigroups
 stm
 template-haskell
 text

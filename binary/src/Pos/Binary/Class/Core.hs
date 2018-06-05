@@ -43,9 +43,11 @@ import qualified Codec.CBOR.Decoding as D
 import qualified Codec.CBOR.Encoding as E
 import qualified Codec.CBOR.Read as CBOR.Read
 import qualified Codec.CBOR.Write as CBOR.Write
+import           Control.Lens (Wrapped (..), iso)
 import           Control.DeepSeq (NFData)
 import qualified Data.Binary as Binary
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as BSC
 import qualified Data.ByteString.Lazy as BS.Lazy
 import           Data.Fixed (Fixed (..), Nano)
 import qualified Data.HashMap.Strict as HM
@@ -54,10 +56,13 @@ import qualified Data.Map as M
 import qualified Data.Set as S
 import           Data.Tagged (Tagged (..))
 import qualified Data.Text as Text
+import           Data.Text.Lazy.Builder as Builder (fromText)
+import           Data.Text.Buildable (Buildable (..))
 import           Data.Time.Units (Microsecond, Millisecond)
 import           Data.Typeable (typeRep)
 import qualified Data.Vector as Vector
 import qualified Data.Vector.Generic as Vector.Generic
+import           Formatting (bprint, int, string, (%))
 import qualified GHC.Generics as G
 import           Serokell.Data.Memory.Units (Byte, fromBytes, toBytes)
 
@@ -106,6 +111,24 @@ data DecoderAttr (attr :: DecoderAttrKind) where
   DecoderAttrNone    ::                             DecoderAttr 'AttrNone
   DecoderAttrOffsets :: ByteOffset -> ByteOffset -> DecoderAttr 'AttrOffsets
   DecoderAttrExtRep  :: ByteString ->               DecoderAttr 'AttrExtRep
+
+instance Buildable (DecoderAttr 'AttrNone) where
+    build DecoderAttrNone = Builder.fromText "DecoderAttrNone"
+
+instance Buildable (DecoderAttr 'AttrOffsets) where
+    build (DecoderAttrOffsets start end) =
+        bprint ("DecoderAttrOffsets "%int%" "%int) start end
+
+instance Buildable (DecoderAttr 'AttrExtRep) where
+    build (DecoderAttrExtRep bs) =
+        bprint ("DecoderAttrExtRep "%string) (BSC.unpack bs)
+
+instance Wrapped (DecoderAttr 'AttrExtRep) where
+    type Unwrapped (DecoderAttr 'AttrExtRep) = ByteString
+    _Wrapped' = iso unwrap DecoderAttrExtRep
+        where
+        unwrap :: DecoderAttr 'AttrExtRep -> ByteString
+        unwrap (DecoderAttrExtRep bs) = bs
 
 -- | Helper function useful when implementing `spliceExtRep`.
 spliceExtRep' :: ByteString -> DecoderAttr 'AttrOffsets -> DecoderAttr 'AttrExtRep

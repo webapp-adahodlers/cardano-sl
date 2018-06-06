@@ -25,7 +25,7 @@ module Pos.Util.Log
        , logError
        , logMessage
        ---
-       , LoggerName 
+       , LoggerName
        , addLoggerName
        , usingLoggerName
        ) where

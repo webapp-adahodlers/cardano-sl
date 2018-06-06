@@ -9,10 +9,10 @@
 
 -- | Safe/secure logging
 
-module Pos.Infra.Util.LogSafe
+module Pos.Util.Log.LogSafe
        ( -- * Logging functions
-         --SelectiveLogWrapped(..)
-         logMessageS
+         SelectiveLogWrapped(..)
+       , logMessageS
        , logDebugS
        , logInfoS
        , logNoticeS
@@ -66,14 +66,10 @@ import           Data.Text.Lazy.Builder (Builder)
 import           Formatting (bprint, build, fconst, later, mapf, (%))
 import           Formatting.Internal (Format (..))
 import qualified Language.Haskell.TH as TH
-import           Serokell.Util (listJson)
-import           Pos.Util.Log (WithLogger, CanLog (..), HasLoggerName (..), Severity (..){-, logMCond-})
---import           System.Wlog.LogHandler (LogHandlerTag (HandlerFilelike))
+import           Pos.Util.Log (CanLog (..), HasLoggerName (..), Severity (..), WithLogger,
+                               logMessage)
 
 import           Pos.Binary.Core ()
-import           Pos.Core (Timestamp, TxId)
-import           Pos.Core.Common (Address, Coin)
-import           Pos.Crypto (PassPhrase)
 
 
 ----------------------------------------------------------------------------
@@ -89,27 +85,34 @@ instance MonadTrans (SelectiveLogWrapped s) where
     lift = SelectiveLogWrapped
 
 -- TODO
-type LogHandlerTag = Text
+-- type LogHandlerTag = Text
+-- | Tag identifying handlers.
+data LogHandlerTag
+    = HandlerFilelike FilePath
+    | HandlerOther String
+    deriving (Show, Eq)
 
 -- | Whether to log to given log handler.
 type SelectionMode = LogHandlerTag -> Bool
 
 selectPublicLogs :: SelectionMode
 selectPublicLogs = \case
-    -- TODO HandlerFilelike p -> ".pub" `isSuffixOf` p
+    -- TODO
+    HandlerFilelike p -> ".pub" `isSuffixOf` p
     _ -> False
 
 selectSecretLogs :: SelectionMode
 selectSecretLogs = not . selectPublicLogs
 
 -- TODO
-logMCond n s m c =
-    return ()
+logMCond :: (LogContext m) => Severity -> Text -> (LogHandlerTag -> Bool) -> m ()
+logMCond sev msg cond = when cond $ logMessage s m
 
-instance (WithLogger m, Reifies s SelectionMode) =>
+
+instance (LogContext m, Reifies s SelectionMode) =>
          CanLog (SelectiveLogWrapped s m) where
-    dispatchMessage name severity msg =
-        liftIO $ logMCond name severity msg (reflect (Proxy @s))
+    dispatchMessage _ severity msg =
+        liftIO $ logMCond severity msg (reflect (Proxy @s))
 
 instance (HasLoggerName m) => HasLoggerName (SelectiveLogWrapped s m) where
     askLoggerName = SelectiveLogWrapped askLoggerName
@@ -322,30 +325,11 @@ logNoticeSP  = logMessageSP Notice
 logWarningSP = logMessageSP Warning
 logErrorSP   = logMessageSP Error
 
-instance Buildable [Address] where
-    build = bprint listJson
-
 instance BuildableSafe a => Buildable (SecureLog [a]) where
     build = bprint (buildSafeList secure) . getSecureLog
 
 instance Buildable (SecureLog Text) where
     build _ = "<hidden>"
 
-instance Buildable (SecureLog PassPhrase) where
-    build _ = "<passphrase>"
-
--- maybe I'm wrong here, but currently masking it important for wallet servant logs
-instance Buildable (SecureLog Coin) where
-    build _ = "? coin(s)"
-
-instance Buildable (SecureLog Address) where
-    build _ = "<address>"
-
 instance Buildable (SecureLog Word32) where
     build _ = "<bytes>"
-
-instance Buildable (SecureLog TxId) where
-    build _ = "<txid>"
-
-instance Buildable (SecureLog Timestamp) where
-    build _ = "<timestamp>"

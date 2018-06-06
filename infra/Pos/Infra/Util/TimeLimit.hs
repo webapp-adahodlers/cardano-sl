@@ -21,8 +21,8 @@ import           Data.Time.Units (Microsecond, Second, convertUnit)
 import           Formatting (sformat, shown, stext, (%))
 import           Mockable (Async, Delay, Mockable, delay, withAsyncWithUnmask)
 import           Pos.Crypto.Random (randomNumber)
---import           Pos.Infra.Util.LogSafe (logWarningS)
 import           Pos.Util.Log (WithLogger, logWarning)
+import           Pos.Util.Log.LogSafe (logWarningS)
 
 
 -- | Data type to represent waiting strategy for printing warnings
@@ -62,8 +62,8 @@ logWarningLongAction {- secure -} _ delta actionTag action =
     -- this function is going to be called under 'mask'.
     withAsyncWithUnmask (\unmask -> unmask $ waitAndWarn delta) (const action)
   where
-    --logFunc :: Text -> m ()
-    --logFunc = bool logWarning logWarningS secure
+    logFunc :: Text -> m ()
+    logFunc = bool logWarning logWarningS secure
     printWarning t = logWarning $ sformat ("Action `"%stext%"` took more than "%shown)
                                        actionTag t
 

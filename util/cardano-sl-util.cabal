@@ -33,6 +33,7 @@ library
                        Pos.Util.Log
                        Pos.Util.LoggerConfig
                        Pos.Util.Log.Internal
+                       Pos.Util.Log.LogSafe
                        Pos.Util.Log.Severity
                        Pos.Util.Log.Scribes
                        Pos.Util.Limits

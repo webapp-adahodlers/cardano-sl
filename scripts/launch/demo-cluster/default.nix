@@ -97,8 +97,7 @@ in pkgs.writeScript "demo-cluster" ''
   ${if launchGenesis then ''
     echo "Copying genesis keys..."
     cp --no-preserve=mode -Rv ${configFiles}/genesis-keys ${stateDir}
-
-    CSL_PRODUCTION=1
+    DEMO_GENESIS_KEYS_DIR=$(realpath ${stateDir}/genesis-keys/generated-keys/rich)
   '' else ''
     echo "Creating genesis keys..."
     cardano-keygen --system-start 0 generate-keys-by-spec --genesis-out-dir ${stateDir}/genesis-keys --configuration-file ${configFiles}/configuration.yaml --configuration-key ${configurationKey}

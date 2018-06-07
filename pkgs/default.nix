@@ -14663,7 +14663,7 @@ license = stdenv.lib.licenses.mit;
 mkDerivation {
 
 pname = "cardano-sl-binary-test";
-version = "1.1.0";
+version = "1.2.0";
 src = ./../binary/test;
 libraryHaskellDepends = [
 base
@@ -15091,7 +15091,7 @@ license = stdenv.lib.licenses.mit;
 mkDerivation {
 
 pname = "cardano-sl-core-test";
-version = "1.1.0";
+version = "1.2.0";
 src = ./../core/test;
 libraryHaskellDepends = [
 base
@@ -15226,7 +15226,7 @@ license = stdenv.lib.licenses.mit;
 mkDerivation {
 
 pname = "cardano-sl-crypto-test";
-version = "1.1.0";
+version = "1.2.0";
 src = ./../crypto/tests;
 libraryHaskellDepends = [
 base
@@ -15995,7 +15995,7 @@ license = stdenv.lib.licenses.mit;
 mkDerivation {
 
 pname = "cardano-sl-lrc-test";
-version = "1.0.0";
+version = "1.2.0";
 src = ./../lrc/test;
 configureFlags = [
 "--ghc-option=-Werror"
@@ -16699,7 +16699,7 @@ license = stdenv.lib.licenses.mit;
 mkDerivation {
 
 pname = "cardano-sl-txp-test";
-version = "1.0.0";
+version = "1.2.0";
 src = ./../txp/test;
 libraryHaskellDepends = [
 base
@@ -16993,7 +16993,7 @@ license = stdenv.lib.licenses.mit;
 mkDerivation {
 
 pname = "cardano-sl-util-test";
-version = "1.1.0";
+version = "1.2.0";
 src = ./../util/test;
 libraryHaskellDepends = [
 attoparsec
@@ -58699,7 +58699,7 @@ license = stdenv.lib.licenses.bsd3;
 mkDerivation {
 
 pname = "node-ipc";
-version = "0.1.0.0";
+version = "1.2.0";
 src = ./../node-ipc;
 libraryHaskellDepends = [
 aeson

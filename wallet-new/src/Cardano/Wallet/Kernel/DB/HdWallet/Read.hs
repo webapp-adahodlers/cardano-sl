@@ -22,20 +22,25 @@ module Cardano.Wallet.Kernel.DB.HdWallet.Read (
   , readAccountsByRootId
   , readAddressesByRootId
   , readAddressesByAccountId
+  , readAddressSetByAccountId
     -- | Single wallets/accounts/addresses
   , readHdRoot
   , readHdAccount
+  , readHdAccountCurrentCheckpoint
   , readHdAddress
   ) where
 
 import           Universum hiding (toList)
 
+import qualified Data.Set as Set
+
 import           Control.Lens (at)
 import           Data.Foldable (toList)
 
-import           Pos.Core (Coin, sumCoins)
+import           Pos.Core (Address, Coin, sumCoins)
 
 import           Cardano.Wallet.Kernel.DB.HdWallet
+import           Cardano.Wallet.Kernel.DB.InDb(InDb (..))
 import           Cardano.Wallet.Kernel.DB.Spec
 import           Cardano.Wallet.Kernel.DB.Util.IxSet (IxSet)
 import qualified Cardano.Wallet.Kernel.DB.Util.IxSet as IxSet
@@ -122,6 +127,13 @@ readAddressesByAccountId accId =
       check (readHdAccount accId)
     $ IxSet.getEQ accId . readAllHdAddresses
 
+-- | Set of raw addresses for the given account
+readAddressSetByAccountId :: HdAccountId -> HdQueryErr UnknownHdAccount (Set Address)
+readAddressSetByAccountId accId db =
+    toAddressSet <$> readAddressesByAccountId accId db
+    where
+        toAddressSet = Set.fromList . map (_fromDb . _hdAddressAddress) . IxSet.toList'
+
 {-------------------------------------------------------------------------------
   Information about a single wallet/address/account
 -------------------------------------------------------------------------------}
@@ -139,6 +151,11 @@ readHdAccount accId = aux . view (at accId) . readAllHdAccounts
   where
     aux :: Maybe a -> Either UnknownHdAccount a
     aux = maybe (Left (UnknownHdAccount accId)) Right
+
+-- | Look up the specified account and return the current checkpoint
+readHdAccountCurrentCheckpoint :: HdAccountId -> HdQueryErr UnknownHdAccount Checkpoint
+readHdAccountCurrentCheckpoint accId db
+    = view hdAccountCurrentCheckpoint <$> readHdAccount accId db
 
 -- | Look up the specified address
 readHdAddress :: HdAddressId -> HdQueryErr UnknownHdAddress HdAddress

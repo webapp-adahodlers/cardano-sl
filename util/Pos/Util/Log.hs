@@ -1,3 +1,4 @@
+-- {-# LANGUAGE DefaultSignatures #-}
 
 module Pos.Util.Log
        ( Severity(..)
@@ -58,10 +59,20 @@ type WithLogger m = (CanLog m, HasLoggerName m)
 
 type LoggerName = Text
 
--- | compatibility
+-- -- | compatibility
 class (MonadIO m, LogContext m) => CanLog m where
     dispatchMessage :: LoggerName -> Severity -> Text -> m ()
     dispatchMessage _ s t = K.logItemM Nothing (Internal.sev2klog s) $ K.logStr t
+
+-- class (MonadIO m, LogContext m) => CanLog m where
+--     dispatchMessage :: LoggerName -> Severity -> Text -> m ()
+
+--     default dispatchMessage :: (t n ~ m)
+--                             => LoggerName
+--                             -> Severity
+--                             -> Text
+--                             -> m ()
+--     dispatchMessage name sev t = K.logItemM Nothing (Internal.sev2klog sev) $ K.logStr t
 
 class (MonadIO m, LogContext m) => HasLoggerName m where
     askLoggerName :: m LoggerName

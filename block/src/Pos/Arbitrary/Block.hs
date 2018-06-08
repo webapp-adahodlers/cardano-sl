@@ -26,7 +26,7 @@ import           Pos.Arbitrary.Delegation (genDlgPayload)
 import           Pos.Arbitrary.Ssc (SscPayloadDependsOnSlot (..), genSscPayload,
                                     genSscPayloadForSlot)
 import           Pos.Arbitrary.Update (genUpdatePayload)
-import           Pos.Binary.Class (biSize)
+import           Pos.Binary.Class (DecoderAttrKind (..), biSize)
 import qualified Pos.Block.Base as T
 import qualified Pos.Block.Logic.Integrity as T
 import           Pos.Block.Slog.Types (SlogUndo)
@@ -278,7 +278,7 @@ instance Buildable T.BlockHeader => Buildable (T.BlockHeader, PublicKey) where
             ) block key
 
 newtype BlockHeaderList = BHL
-    { getHeaderList :: ([T.BlockHeader], [PublicKey])
+    { getHeaderList :: ([T.BlockHeader 'AttrNone], [PublicKey])
     } deriving (Eq)
 
 instance Buildable T.BlockHeader => Show BlockHeaderList where

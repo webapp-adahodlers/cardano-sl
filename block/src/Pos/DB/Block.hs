@@ -45,14 +45,13 @@ import           System.IO (IOMode (WriteMode), hClose, hFlush, openBinaryFile)
 import           System.IO.Error (IOError, isDoesNotExistError)
 
 import           Pos.Binary.Block.Types ()
-import           Pos.Binary.Class (decodeFull', serialize')
+import           Pos.Binary.Class (DecoderAttrKind (..), decodeFull', serialize')
 import           Pos.Binary.Core ()
 import           Pos.Block.BHelpers ()
 import           Pos.Block.Types (Blund, SlogUndo (..), Undo (..))
-import           Pos.Core (HeaderHash, headerHash)
+import           Pos.Core (HeaderHash, headerHash, headerHashHexF)
 import           Pos.Core.Block (Block, GenesisBlock)
 import qualified Pos.Core.Block as CB
-import           Pos.Crypto (hashHexF)
 import           Pos.DB.BlockIndex (deleteHeaderIndex, putHeadersIndex)
 import           Pos.DB.Class (MonadDB (..), MonadDBRead (..), Serialized (..), SerializedBlock,
                                SerializedUndo, SerializedBlund, getBlock, getDeserialized)
@@ -75,7 +74,7 @@ getUndo = getDeserialized dbGetSerUndo
 -- read 'Blund'.
 --
 -- TODO Rewrite to use a single call
-getBlund :: MonadDBRead m => HeaderHash -> m (Maybe (Block, Undo))
+getBlund :: MonadDBRead m => HeaderHash -> m (Maybe (Block 'AttrNone, Undo))
 getBlund x =
     runMaybeT $
     (,) <$> MaybeT (getBlock x)
@@ -85,14 +84,16 @@ getBlund x =
 --
 --   Notice that this uses an unusual encoding, in order to be able to fetch
 --   either the block or the undo independently without re-encoding.
-putBlunds :: MonadDB m => NonEmpty Blund -> m ()
+--
+-- TODO: Using `Blund 'AttrExtRep` we could save on serialization.
+putBlunds :: MonadDB m => NonEmpty (Blund 'AttrNone) -> m ()
 putBlunds = dbPutSerBlunds
           . map (\bu@(b,_) -> ( CB.getBlockHeader b
                               , Serialized . serialize' $ bimap serialize' serialize' bu)
                 )
 
 -- | Get 'Block' corresponding to tip.
-getTipBlock :: MonadDBRead m => m Block
+getTipBlock :: MonadDBRead m => m (Block 'AttrNone)
 getTipBlock = getTipSomething "block" getBlock
 
 ----------------------------------------------------------------------------
@@ -157,7 +158,7 @@ consolidateBlund hh = do
 -- Consider using 'dbPutBlund' instead.
 putSerializedBlunds
     :: (MonadRealDB ctx m, MonadDB m)
-    => NonEmpty (CB.BlockHeader, SerializedBlund) -> m ()
+    => NonEmpty (CB.BlockHeader 'AttrNone, SerializedBlund) -> m ()
 putSerializedBlunds (toList -> bs) = do
     bdd <- view blockDataDir <$> getNodeDBs
     let allData = map (\(bh,bu) -> let bsp = getAllPaths bdd (headerHash bh)
@@ -183,11 +184,11 @@ deleteBlock hh = do
 
 prepareBlockDB
     :: MonadDB m
-    => GenesisBlock -> m ()
+    => GenesisBlock 'AttrNone -> m ()
 prepareBlockDB blk =
     dbPutSerBlunds
     $ one ( CB.getBlockHeader $ Left blk
-          , Serialized . serialize' $ bimap (serialize' @Block) serialize' (Left blk, genesisUndo))
+          , Serialized . serialize' $ bimap (serialize' @(Block 'AttrNone)) serialize' (Left blk, genesisUndo))
   where
     genesisUndo =
         Undo
@@ -227,7 +228,7 @@ dbGetSerUndoPureDefault h =  do
 
 dbPutSerBlundsPureDefault ::
        forall ctx m. (MonadPureDB ctx m, MonadDB m)
-    => NonEmpty (CB.BlockHeader, SerializedBlund)
+    => NonEmpty (CB.BlockHeader 'AttrNone, SerializedBlund)
     -> m ()
 dbPutSerBlundsPureDefault (toList -> blunds) = do
     forM_ blunds $ \(bh, serBlund) -> do
@@ -261,7 +262,7 @@ dbGetSerUndoRealDefault x = Serialized <<$>> getSerializedUndo x
 
 dbPutSerBlundsRealDefault ::
        (MonadDB m, MonadRealDB ctx m)
-    => NonEmpty (CB.BlockHeader, SerializedBlund)
+    => NonEmpty (CB.BlockHeader 'AttrNone, SerializedBlund)
     -> m ()
 dbPutSerBlundsRealDefault = putSerializedBlunds
 
@@ -287,7 +288,7 @@ dbGetSerUndoSumDefault hh =
 
 dbPutSerBlundsSumDefault
     :: forall ctx m. (DBSumEnv ctx m)
-    => NonEmpty (CB.BlockHeader, SerializedBlund) -> m ()
+    => NonEmpty (CB.BlockHeader 'AttrNone, SerializedBlund) -> m ()
 dbPutSerBlundsSumDefault b =
     eitherDB (dbPutSerBlundsRealDefault b) (dbPutSerBlundsPureDefault b)
 
@@ -331,7 +332,7 @@ data BlockStoragePaths = BlockStoragePaths
 getAllPaths :: FilePath -> HeaderHash -> BlockStoragePaths
 getAllPaths bdd hh = BlockStoragePaths dir bl un blund
   where
-    (fn0, fn1) = splitAt 2 $ formatToString hashHexF hh
+    (fn0, fn1) = splitAt 2 $ formatToString headerHashHexF hh
     dir = bdd </> fn0
     bl = dir </> (fn1 <> ".block")
     un = dir </> (fn1 <> ".undo")

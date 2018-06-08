@@ -16,10 +16,11 @@ import           Universum
 
 import           Data.Default (Default (def))
 
+import           Pos.Binary.Class (DecoderAttrKind (AttrNone), DecoderAttr)
 import           Pos.Block.BHelpers ()
 import           Pos.Core (BlockVersion, ChainDifficulty, EpochIndex, GenesisHash (..),
                            HasDifficulty (..), HasProtocolConstants, HeaderHash, LocalSlotIndex,
-                           SlotId, SlotLeaders, SoftwareVersion, headerHash)
+                           SlotId, SlotLeaders, SoftwareVersion, headerHash, getGenesisHeaderHash)
 import           Pos.Core.Block (BlockHeader, BlockSignature (..), GenericBlock (..), GenesisBlock,
                                  GenesisBlockHeader, GenesisBody (..), GenesisConsensusData (..),
                                  GenesisExtraBodyData (..), GenesisExtraHeaderData (..), MainBlock,
@@ -40,17 +41,18 @@ import           Pos.Txp.Base (emptyTxPayload)
 -- | Smart constructor for 'MainBlockHeader'.
 mkMainHeader
     :: ProtocolMagic
-    -> Either GenesisHash BlockHeader
+    -> Either GenesisHash (BlockHeader 'AttrNone)
     -> SlotId
     -> SecretKey
     -> ProxySKBlockInfo
     -> MainBody
     -> MainExtraHeaderData
-    -> MainBlockHeader
-mkMainHeader pm prevHeader =
-    mkMainHeaderExplicit pm prevHash difficulty
+    -> DecoderAttr attr
+    -> MainBlockHeader attr
+mkMainHeader pm prevHeader slotId sk pske body extra decAttr =
+    mkMainHeaderExplicit pm prevHash difficulty slotId sk pske body extra decAttr
   where
-    prevHash = either getGenesisHash headerHash prevHeader
+    prevHash = either getGenesisHeaderHash headerHash prevHeader
     difficulty = either (const 0) (succ . view difficultyL) prevHeader
 
 -- | Make a 'MainBlockHeader' for a given slot, with a given body, parent hash,
@@ -64,9 +66,10 @@ mkMainHeaderExplicit
     -> ProxySKBlockInfo
     -> MainBody
     -> MainExtraHeaderData
-    -> MainBlockHeader
-mkMainHeaderExplicit pm prevHash difficulty slotId sk pske body extra =
-    mkGenericHeader pm prevHash body consensus extra
+    -> DecoderAttr attr 
+    -> MainBlockHeader attr
+mkMainHeaderExplicit pm prevHash difficulty slotId sk pske body extra decAttr =
+    mkGenericHeader pm prevHash body consensus extra decAttr
   where
     makeSignature toSign (psk,_) =
         BlockPSignatureHeavy $ proxySign pm SignMainBlockHeavy sk psk toSign
@@ -90,15 +93,18 @@ mkMainBlock
     :: ProtocolMagic
     -> BlockVersion
     -> SoftwareVersion
-    -> Either GenesisHash BlockHeader
+    -> Either GenesisHash (BlockHeader attr)
     -> SlotId
     -> SecretKey
     -> ProxySKBlockInfo
     -> MainBody
-    -> MainBlock
-mkMainBlock pm bv sv prevHeader = mkMainBlockExplicit pm bv sv prevHash difficulty
-  where
-    prevHash = either getGenesisHash headerHash prevHeader
+    -> DecoderAttr attr -- ^ header's attributes
+    -> DecoderAttr attr -- ^ block's attributes
+    -> MainBlock attr
+mkMainBlock pm bv sv prevHeader decHeaderAttrs decAttr =
+    mkMainBlockExplicit pm bv sv prevHash difficulty decHeaderAttrs decAttr
+ where
+    prevHash = either getGenesisHeaderHash headerHash prevHeader
     difficulty = either (const 0) (succ . view difficultyL) prevHeader
 
 -- | Smart constructor for 'MainBlock', without requiring the entire previous
@@ -115,12 +121,15 @@ mkMainBlockExplicit
     -> SecretKey
     -> ProxySKBlockInfo
     -> MainBody
-    -> MainBlock
-mkMainBlockExplicit pm bv sv prevHash difficulty slotId sk pske body =
+    -> DecoderAttr attr -- ^ header's attributes
+    -> DecoderAttr attr -- ^ block's attributes
+    -> MainBlock attr
+mkMainBlockExplicit pm bv sv prevHash difficulty slotId sk pske body decHeaderAttr decAttr =
     UnsafeGenericBlock
-        (mkMainHeaderExplicit pm prevHash difficulty slotId sk pske body extraH)
+        (mkMainHeaderExplicit pm prevHash difficulty slotId sk pske body extraH decHeaderAttr)
         body
         extraB
+        decAttr
   where
     extraB :: MainExtraBodyData
     extraB = MainExtraBodyData (mkAttributes ())
@@ -152,18 +161,20 @@ emptyMainBody slot =
 -- | Smart constructor for 'GenesisBlockHeader'. Uses 'mkGenericHeader'.
 mkGenesisHeader
     :: ProtocolMagic
-    -> Either GenesisHash BlockHeader
+    -> Either GenesisHash (BlockHeader attr)
     -> EpochIndex
     -> GenesisBody
-    -> GenesisBlockHeader
-mkGenesisHeader pm prevHeader epoch body =
+    -> DecoderAttr attr
+    -> GenesisBlockHeader attr
+mkGenesisHeader pm prevHeader epoch body decAttr =
     -- here we know that genesis header construction can not fail
     mkGenericHeader
         pm
-        (either getGenesisHash headerHash prevHeader)
+        (either getGenesisHeaderHash headerHash prevHeader)
         body
         consensus
         (GenesisExtraHeaderData $ mkAttributes ())
+        decAttr
   where
     difficulty = either (const 0) (view difficultyL) prevHeader
     consensus = const (GenesisConsensusData {_gcdEpoch = epoch, _gcdDifficulty = difficulty})
@@ -171,17 +182,26 @@ mkGenesisHeader pm prevHeader epoch body =
 -- | Smart constructor for 'GenesisBlock'.
 mkGenesisBlock
     :: ProtocolMagic
-    -> Either GenesisHash BlockHeader
+    -> Either GenesisHash (BlockHeader attr)
     -> EpochIndex
     -> SlotLeaders
-    -> GenesisBlock
-mkGenesisBlock pm prevHeader epoch leaders =
-    UnsafeGenericBlock header body extra
+    -> DecoderAttr attr -- ^ header's attributes
+    -> DecoderAttr attr -- ^ block's attributes
+    -> GenesisBlock attr
+mkGenesisBlock pm prevHeader epoch leaders decHeaderAttr decAttr =
+    UnsafeGenericBlock header body extra decAttr
   where
-    header = mkGenesisHeader pm prevHeader epoch body
+    header = mkGenesisHeader pm prevHeader epoch body decHeaderAttr
     body = GenesisBody leaders
     extra = GenesisExtraBodyData $ mkAttributes ()
 
 -- | Creates the very first genesis block.
-genesisBlock0 :: ProtocolMagic -> GenesisHash -> SlotLeaders -> GenesisBlock
-genesisBlock0 pm genesisHash leaders = mkGenesisBlock pm (Left genesisHash) 0 leaders
+genesisBlock0
+    :: ProtocolMagic
+    -> GenesisHash
+    -> SlotLeaders
+    -> DecoderAttr attr -- ^ headers' attributes
+    -> DecoderAttr attr -- ^ block's attributes
+    -> GenesisBlock attr
+genesisBlock0 pm genesisHash leaders decHeaderAttr decAttr =
+    mkGenesisBlock pm (Left genesisHash) 0 leaders decHeaderAttr decAttr

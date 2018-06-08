@@ -27,4 +27,4 @@ data BlockRetrievalTask = BlockRetrievalTask
 data BlockRetrievalQueueTag
 
 -- | Queue types.
-type BlockRetrievalQueue attr = TBQueue (NodeId, BlockRetrievalTask)
+type BlockRetrievalQueue = TBQueue (NodeId, BlockRetrievalTask)

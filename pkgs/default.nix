@@ -15778,6 +15778,7 @@ license = stdenv.lib.licenses.mit;
 , base
 , bytestring
 , cardano-sl-core
+, cardano-sl-crypto
 , cardano-sl-infra
 , hedgehog
 , kademlia
@@ -15795,6 +15796,7 @@ libraryHaskellDepends = [
 base
 bytestring
 cardano-sl-core
+cardano-sl-crypto
 cardano-sl-infra
 hedgehog
 kademlia

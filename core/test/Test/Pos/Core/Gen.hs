@@ -47,6 +47,7 @@ module Test.Pos.Core.Gen
         , genEpochIndex
         , genFlatSlotId
         , genLocalSlotIndex
+        , genSlotCount
         , genSlotId
         , genTimeDiff
         , genTimestamp
@@ -136,8 +137,9 @@ import           Pos.Core.Common (Address (..), AddrAttributes (..),
 import           Pos.Core.Configuration (GenesisHash (..))
 import           Pos.Core.Delegation (HeavyDlgIndex (..), LightDlgIndices (..), ProxySKHeavy)
 import           Pos.Core.Slotting (EpochIndex (..), FlatSlotId,
-                                    LocalSlotIndex (..), SlotId (..),
-                                    TimeDiff (..), Timestamp (..))
+                                    LocalSlotIndex (..), SlotCount (..),
+                                    SlotId (..), TimeDiff (..),
+                                    Timestamp (..))
 import           Pos.Core.Ssc (Commitment, CommitmentSignature, CommitmentsMap,
                                mkCommitmentsMap, mkSscProof, mkVssCertificate,
                                mkVssCertificatesMap, Opening, OpeningsMap,
@@ -402,6 +404,9 @@ genFlatSlotId = Gen.word64 Range.constantBounded
 
 genLocalSlotIndex :: Gen LocalSlotIndex
 genLocalSlotIndex = UnsafeLocalSlotIndex <$> Gen.word16 (Range.constant 0 21599)
+
+genSlotCount :: Gen SlotCount
+genSlotCount = SlotCount <$> Gen.word64 Range.constantBounded
 
 genSlotId :: Gen SlotId
 genSlotId = SlotId <$> genEpochIndex <*> genLocalSlotIndex

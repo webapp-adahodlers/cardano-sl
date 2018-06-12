@@ -31,10 +31,15 @@ module Test.Pos.Core.Gen
         , genCoinPortion
         , genScript
         , genScriptVersion
+        , genSharedSeed
         , genSlotLeaders
         , genStakeholderId
         , genTxFeePolicy
         , genTxSizeLinear
+
+        -- Pos.Core.Configuration Generators
+        , genGenesisConfiguration
+        , genCoreConfiguration
 
         -- Pos.Core.Delegation Generators
         , genDlgPayload
@@ -42,6 +47,18 @@ module Test.Pos.Core.Gen
         , genLightDlgIndices
         , genProxySKBlockInfo
         , genProxySKHeavy
+
+        -- Pos.Core.Genesis Generators
+        , genFakeAvvmOptions
+        , genGenesisAvvmBalances
+        , genGenesisDelegation
+        , genGenesisProtocolConstants
+        , genGenesisSpec
+        , genTestnetBalanceOptions
+
+        -- Pos.Core.ProtocolConstants
+        , genVssMaxTTL
+        , genVssMinTTL
 
         -- Pos.Core.Slotting Generators
         , genEpochIndex
@@ -113,6 +130,7 @@ module Test.Pos.Core.Gen
 import           Universum
 
 import           Data.Coerce (coerce)
+import           Data.Either (either)
 import           Data.Fixed (Fixed (..))
 import qualified Data.HashMap.Strict as HM
 import           Data.List.NonEmpty (fromList)
@@ -133,10 +151,16 @@ import           Pos.Core.Common (Address (..), AddrAttributes (..),
                                   AddrSpendingData (..), AddrStakeDistribution (..),
                                   AddrType (..), BlockCount (..), ChainDifficulty (..),
                                   Coeff (..), Coin (..),CoinPortion (..), makeAddress,
-                                  Script (..), ScriptVersion, SlotLeaders, StakeholderId,
-                                  TxFeePolicy (..), TxSizeLinear (..))
-import           Pos.Core.Configuration (GenesisHash (..))
+                                  Script (..), ScriptVersion, SharedSeed (..), SlotLeaders,
+                                  StakeholderId, TxFeePolicy (..), TxSizeLinear (..))
+import           Pos.Core.Configuration (CoreConfiguration (..), GenesisConfiguration (..),
+                                         GenesisHash (..))
 import           Pos.Core.Delegation (HeavyDlgIndex (..), LightDlgIndices (..), ProxySKHeavy)
+import           Pos.Core.Genesis (FakeAvvmOptions (..), GenesisAvvmBalances (..),
+                                   GenesisDelegation (..),GenesisInitializer (..),
+                                   GenesisProtocolConstants (..), GenesisSpec (..),
+                                   mkGenesisSpec, TestnetBalanceOptions (..))
+import           Pos.Core.ProtocolConstants (VssMinTTL (..), VssMaxTTL (..))
 import           Pos.Core.Slotting (EpochIndex (..), EpochOrSlot (..),
                                     FlatSlotId, LocalSlotIndex (..),
                                     SlotCount (..), SlotId (..),
@@ -348,6 +372,9 @@ genScript = Script <$> genScriptVersion <*> gen32Bytes
 genScriptVersion :: Gen ScriptVersion
 genScriptVersion = Gen.word16 Range.constantBounded
 
+genSharedSeed :: Gen SharedSeed
+genSharedSeed = SharedSeed <$> gen32Bytes
+
 genSlotLeaders :: Gen SlotLeaders
 genSlotLeaders = do
     stakeHolderList <- Gen.list (Range.constant 0 10) genStakeholderId
@@ -364,6 +391,25 @@ genTxFeePolicy =
 
 genTxSizeLinear :: Gen TxSizeLinear
 genTxSizeLinear = TxSizeLinear <$> genCoeff <*> genCoeff
+
+----------------------------------------------------------------------------
+-- Pos.Core.Configuration Generators
+----------------------------------------------------------------------------
+
+genGenesisConfiguration :: Gen GenesisConfiguration
+genGenesisConfiguration =
+    Gen.choice [ GCSrc
+                     <$> Gen.string (Range.constant 10 25) Gen.alphaNum
+                     <*> genHashRaw
+               , GCSpec <$> genGenesisSpec
+               ]
+
+genCoreConfiguration :: Gen CoreConfiguration
+genCoreConfiguration =
+    CoreConfiguration
+        <$> genGenesisConfiguration
+        <*> genWord8
+
 ----------------------------------------------------------------------------
 -- Pos.Core.Delegation Generators
 ----------------------------------------------------------------------------
@@ -392,6 +438,67 @@ genProxySKHeavy =
         <*> genSafeSigner
         <*> genPublicKey
         <*> genHeavyDlgIndex
+
+----------------------------------------------------------------------------
+-- Pos.Core.Genesis Generators
+----------------------------------------------------------------------------
+
+genFakeAvvmOptions :: Gen FakeAvvmOptions
+genFakeAvvmOptions =
+    FakeAvvmOptions
+        <$> Gen.word Range.constantBounded
+        <*> Gen.word64 Range.constantBounded
+
+genGenesisDelegation :: Gen GenesisDelegation
+genGenesisDelegation =
+    UnsafeGenesisDelegation
+        <$> customHashMapGen genStakeholderId genProxySKHeavy
+
+genGenesisInitializer :: Gen GenesisInitializer
+genGenesisInitializer =
+    GenesisInitializer
+        <$> genTestnetBalanceOptions
+        <*> genFakeAvvmOptions
+        <*> genCoinPortion
+        <*> Gen.bool
+        <*> Gen.integral (Range.constant 0 10)
+
+genGenesisProtocolConstants :: Gen GenesisProtocolConstants
+genGenesisProtocolConstants =
+    GenesisProtocolConstants
+        <$> Gen.int (Range.constant 0 100)
+        <*> genProtocolMagic
+        <*> genVssMaxTTL
+        <*> genVssMinTTL
+
+genGenesisSpec :: Gen GenesisSpec
+genGenesisSpec = mkGenSpec >>=  either (error . toText) pure
+    where
+        mkGenSpec = mkGenesisSpec
+                      <$> genGenesisAvvmBalances
+                      <*> genSharedSeed
+                      <*> genGenesisDelegation
+                      <*> genBlockVersionData
+                      <*> genGenesisProtocolConstants
+                      <*> genGenesisInitializer
+
+genTestnetBalanceOptions :: Gen TestnetBalanceOptions
+genTestnetBalanceOptions =
+    TestnetBalanceOptions
+        <$> Gen.word Range.constantBounded
+        <*> Gen.word Range.constantBounded
+        <*> Gen.word64 Range.constantBounded
+        <*> Gen.double (Range.constant 0 10)
+        <*> Gen.bool
+----------------------------------------------------------------------------
+-- Pos.Core.ProtocolConstants Generators
+----------------------------------------------------------------------------
+
+genVssMaxTTL :: Gen VssMaxTTL
+genVssMaxTTL = VssMaxTTL <$> genWord32
+
+genVssMinTTL :: Gen VssMinTTL
+genVssMinTTL = VssMinTTL <$> genWord32
 
 ----------------------------------------------------------------------------
 -- Pos.Core.Slotting Generators
@@ -427,6 +534,9 @@ genTimestamp = Timestamp <$> genMicrosecond
 ----------------------------------------------------------------------------
 -- Pos.Core.Ssc Generators
 ----------------------------------------------------------------------------
+
+genGenesisAvvmBalances :: Gen GenesisAvvmBalances
+genGenesisAvvmBalances = GenesisAvvmBalances <$> customHashMapGen genRedeemPublicKey genCoin
 
 data CommitmentOpening = CommitmentOpening
     { unCommitment :: !Commitment
@@ -727,6 +837,13 @@ genMerkleRootTx = mtRoot <$> genMerkleTreeTx
 ----------------------------------------------------------------------------
 -- Helper Generators
 ----------------------------------------------------------------------------
+
+customHashMapGen
+    :: (Hashable k, Eq k)
+    => Gen k -> Gen v -> Gen (HM.HashMap k v)
+customHashMapGen keyGen valGen =
+    HM.fromList
+        <$> (Gen.list (Range.constant 1 10) $ (,) <$> keyGen <*> valGen)
 
 genBytes :: Int -> Gen ByteString
 genBytes n = Gen.bytes (Range.singleton n)

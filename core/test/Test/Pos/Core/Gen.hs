@@ -87,6 +87,7 @@ module Test.Pos.Core.Gen
 
         -- Pos.Core.Update Generators
         , genBlockVersion
+        , genBlockVersionData
         , genBlockVersionModifier
         , genHashRaw
         , genSoftforkRule
@@ -147,11 +148,11 @@ import           Pos.Core.Txp (TxAttributes, Tx (..), TxId, TxIn (..),
                                TxInWitness (..), TxOut (..), TxPayload (..),
                                TxProof (..), TxSig, TxSigData (..), TxWitness)
 import           Pos.Core.Update (ApplicationName (..), BlockVersion (..),
-                                  BlockVersionModifier (..), SoftforkRule(..),
-                                  SoftwareVersion (..), SystemTag (..), UpAttributes,
-                                  UpdateData (..), UpdatePayload (..), UpdateProof,
-                                  UpdateProposal (..), UpdateProposalToSign  (..),
-                                  UpdateVote (..), UpId)
+                                  BlockVersionData (..), BlockVersionModifier (..),
+                                  SoftforkRule(..), SoftwareVersion (..),
+                                  SystemTag (..), UpAttributes, UpdateData (..),
+                                  UpdatePayload (..), UpdateProof, UpdateProposal (..),
+                                  UpdateProposalToSign  (..), UpdateVote (..), UpId)
 import           Pos.Crypto (deterministic, Hash, hash, safeCreatePsk, sign)
 import           Pos.Data.Attributes (mkAttributes)
 import           Pos.Delegation.Types (DlgPayload (..), ProxySKBlockInfo)
@@ -588,6 +589,25 @@ genBlockVersion =
         <*> Gen.word16 Range.constantBounded
         <*> Gen.word8 Range.constantBounded
 
+genBlockVersionData :: Gen BlockVersionData
+genBlockVersionData =
+    BlockVersionData
+        <$> genScriptVersion
+        <*> genMillisecond
+        <*> genByte
+        <*> genByte
+        <*> genByte
+        <*> genByte
+        <*> genCoinPortion
+        <*> genCoinPortion
+        <*> genCoinPortion
+        <*> genCoinPortion
+        <*> genFlatSlotId
+        <*> genSoftforkRule
+        <*> genTxFeePolicy
+        <*> genEpochIndex
+
+
 genBlockVersionModifier :: Gen BlockVersionModifier
 genBlockVersionModifier =
     BlockVersionModifier
@@ -605,6 +625,7 @@ genBlockVersionModifier =
         <*> Gen.maybe genSoftforkRule
         <*> Gen.maybe genTxFeePolicy
         <*> Gen.maybe genEpochIndex
+
 
 
 genHashRaw :: Gen (Hash Raw)

@@ -56,9 +56,11 @@ import           Cardano.Wallet.Kernel.DB.AcidState (DB, defDB, dbHdWallets
                                                    , Snapshot (..))
 import           Cardano.Wallet.Kernel.DB.BlockMeta (BlockMeta (..))
 import qualified Cardano.Wallet.Kernel.DB.HdWallet as HD
-import qualified Cardano.Wallet.Kernel.DB.HdWallet.Read as HD
+import qualified Cardano.Wallet.Kernel.DB.HdWallet.Create as HD
+import           Cardano.Wallet.Kernel.DB.HdWallet.Read (HdQueryErr)
 import           Cardano.Wallet.Kernel.DB.InDb
 import qualified Cardano.Wallet.Kernel.DB.Spec.Read as Spec
+
 
 import           Pos.Core (Timestamp (..), TxAux (..), AddressHash, Coin)
 
@@ -136,18 +138,18 @@ initPassiveWallet logMessage db = do
 init :: PassiveWallet -> IO ()
 init PassiveWallet{..} = _walletLogMessage Info "Passive Wallet kernel initialized"
 
-fail' :: (Buildable a, MonadFail m) => a -> m b
-fail' e' = fail . toString $ sformat build e'
-
 {-------------------------------------------------------------------------------
   Wallet Creation
 -------------------------------------------------------------------------------}
 
 -- | Creates an HD wallet with randomly generated addresses.
 --
+-- Prefilters the Utxo before passing it to the Acidstate update.
+
 -- Adds an HdRoot and HdAccounts (which are discovered during prefiltering of utxo).
 -- (In the case of empty utxo, no HdAccounts are created.)
---
+-- May fail with CreateHdWalletError if the HdRootId already exists
+
 -- The ESK is indexed by WalletId and added to the WalletESK map.
 createWalletHdRnd :: PassiveWallet
                   -> HD.WalletName
@@ -155,22 +157,21 @@ createWalletHdRnd :: PassiveWallet
                   -> AssuranceLevel
                   -> (AddressHash PublicKey, EncryptedSecretKey)
                   -> Utxo
-                  -> IO [HdAccountId]
+                  -> IO (Either HD.CreateHdWalletError [HdAccountId])
 createWalletHdRnd pw@PassiveWallet{..} name spendingPassword assuranceLevel (pk,esk) utxo = do
     created <- InDb <$> getCurrentTimestamp
     res <- update' _wallets
-           $ CreateHdWallet rootId name spendingPassword assuranceLevel created utxoByAccount
+               $ CreateHdWallet rootId name spendingPassword assuranceLevel created utxoByAccount
 
-    -- fails if the HdRootId already exists (see `CreateHdWalletError`)
-    either fail' success res
+    either (return . Left) insertESK res
     where
         utxoByAccount = prefilterUtxo rootId esk utxo
+        accountIds    = Map.keys utxoByAccount
 
         rootId        = HD.HdRootId . InDb $ pk
         walletId      = WalletIdHdRnd rootId
-        accountIds    = Map.keys utxoByAccount
 
-        success _arg = insertWalletESK pw walletId esk >> return accountIds
+        insertESK _arg = insertWalletESK pw walletId esk >> return (Right accountIds)
 
 -- TODO find a home for this
 -- (NOTE: we are abandoning the 'Mockable time' strategy of the Cardano code base)
@@ -183,6 +184,7 @@ getCurrentTimestamp = Timestamp . round . (* 1000) <$> getPOSIXTime
 
 -- | Prefilter the block for each esk in the `WalletESK` map.
 --   Return a unified Map of accountId and prefiltered blocks (representing multiple ESKs)
+-- TODO optimisation: we are prefiltering the block n times for n keys, change this to be a single pass
 prefilterBlock' :: PassiveWallet
                 -> ResolvedBlock
                 -> IO (Map HdAccountId PrefilteredBlock)
@@ -202,7 +204,7 @@ applyBlock :: PassiveWallet
 applyBlock pw@PassiveWallet{..} b
     = do
         blocksByAccount <- prefilterBlock' pw b
-        -- TODO BlockMeta as arg to applyBlock (use checkPoint ^. currentBMeta)
+        -- TODO proper initialisation
         let blockMeta = BlockMeta . InDb $ Map.empty
 
         -- apply block to all Accounts in all Wallets
@@ -211,10 +213,9 @@ applyBlock pw@PassiveWallet{..} b
 -- | Apply multiple blocks, one at a time, to all wallets in the PassiveWallet
 --
 --   TODO: this will be the responsibility of @matt-noonan's worker thread
-applyBlocks :: (Container (f ResolvedBlock))
-              => PassiveWallet
-              -> OldestFirst f ResolvedBlock
-              -> IO ()
+applyBlocks :: PassiveWallet
+            -> OldestFirst [] ResolvedBlock
+            -> IO ()
 applyBlocks pw = mapM_ (applyBlock pw)
 
 {-------------------------------------------------------------------------------
@@ -255,24 +256,21 @@ newPending ActiveWallet{..} accountId tx
   Wallet Account read-only API
 -------------------------------------------------------------------------------}
 
+walletQuery' :: forall e a. (Buildable e)
+             => PassiveWallet
+             -> HdQueryErr e a
+             -> IO a
+walletQuery' pw qry= do
+    snapshot <- query' (pw ^. wallets) Snapshot
+    let res = qry (snapshot ^. dbHdWallets)
+    either err return res
+    where
+        err = error . sformat build
+
 accountUtxo :: PassiveWallet -> HdAccountId -> IO Utxo
-accountUtxo pw accountId = do
-    db <- query' (pw ^. wallets) Snapshot
-
-    let checkpoint = HD.readHdAccountCurrentCheckpoint accountId (db ^. dbHdWallets)
-        utxo'      = Spec.accountUtxo <$> checkpoint
-
-    either unknownAccountErr return utxo'
+accountUtxo pw accountId
+    = walletQuery' pw (Spec.queryAccountUtxo accountId)
 
 accountTotalBalance :: PassiveWallet -> HdAccountId -> IO Coin
-accountTotalBalance pw accountId = do
-    db <- query' (pw ^. wallets) Snapshot
-
-    let checkpoint   = HD.readHdAccountCurrentCheckpoint accountId (db ^. dbHdWallets)
-        ourAddrs     = HD.readAddressesByAccountId       accountId (db ^. dbHdWallets)
-        totalBalance = Spec.accountTotalBalance <$> ourAddrs <*> checkpoint
-
-    either unknownAccountErr return totalBalance
-
-unknownAccountErr :: forall a. UnknownHdAccount -> IO a
-unknownAccountErr = error . sformat build
+accountTotalBalance pw accountId
+    = walletQuery' pw (Spec.queryAccountTotalBalance accountId)

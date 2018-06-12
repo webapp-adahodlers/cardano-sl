@@ -17,6 +17,7 @@ import           Universum
 import qualified Cardano.Wallet.Kernel as Kernel
 import           Cardano.Wallet.Kernel.Types
 import qualified Data.Text.Buildable
+import qualified Data.List as List
 import           Formatting (bprint, build, (%))
 
 import           Pos.Txp (Utxo, formatUtxo)
@@ -158,23 +159,31 @@ equivalentT activeWallet (pk,esk) = \mkWallet w ->
                 -> Utxo
                 -> TranslateT (EquivalenceViolation h) m HD.HdAccountId
     walletBootT ctxt utxo = do
-        accountIds <- liftIO $ Kernel.createWalletHdRnd passiveWallet walletName
-                                                        spendingPassword assuranceLevel
-                                                        (pk,esk) utxo
-        let accountId = pickSingletonAccountId accountIds
+        res <- liftIO $ Kernel.createWalletHdRnd passiveWallet walletName
+                                                 spendingPassword assuranceLevel
+                                                 (pk,esk) utxo
 
-        checkWalletState ctxt accountId >> return accountId
+        either createWalletErr (checkWalletAccountState ctxt) res
+
         where
             walletName       = HD.WalletName "(test wallet)"
             spendingPassword = HD.NoSpendingPassword
             assuranceLevel   = HD.AssuranceLevelNormal
 
+            createWalletErr _ = error "ERROR: could not create the HdWallet"
+
+            checkWalletAccountState ctxt' accountIds' = do
+                let accountId' = pickSingletonAccountId accountIds'
+                checkWalletState ctxt' accountId'
+                return accountId'
+
             -- Since the DSL Wallet does not model Account, a DSL Wallet is expressed
             -- as a Cardano Wallet with exactly one Account.
             -- Here, we safely extract the AccountId.
+            pickSingletonAccountId :: [HD.HdAccountId] -> HD.HdAccountId
             pickSingletonAccountId accountIds' =
                 case length accountIds' of
-                    1 -> fromMaybe (error "Impossible!") (head accountIds')
+                    1 -> List.head accountIds'
                     0 -> error "ERROR: no accountIds generated for the given Utxo"
                     _ -> error "ERROR: multiple AccountIds, only one expected"
 
@@ -239,7 +248,7 @@ equivalentT activeWallet (pk,esk) = \mkWallet w ->
     toCardano InductiveCtxt{..} fld a = do
         ma' <- catchTranslateErrors $ runIntT' inductiveCtxtInt $ int a
         case ma' of
-          Left err -> throwError $ EquivalenceNotChecked {
+          Left err -> throwError EquivalenceNotChecked {
               equivalenceNotCheckedName   = fld
             , equivalenceNotCheckedReason = err
             , equivalenceNotCheckedEvents = inductiveCtxtEvents
@@ -296,7 +305,7 @@ instance Hash h Addr => Buildable (EquivalenceViolation h) where
     equivalenceViolationName
     equivalenceViolationEvidence
     equivalenceViolationEvents
-  build (EquivalenceNotChecked{..}) = bprint
+  build EquivalenceNotChecked{..} = bprint
     ( "EquivalenceNotChecked "
     % "{ name:      " % build
     % ", reason:    " % build

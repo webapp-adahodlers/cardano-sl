@@ -60,9 +60,6 @@ data CreateHdWalletError =
     -- | Could not create an HdAccount
   | CreateHdWalletAccountFailed CreateHdAccountError
 
-    -- | Could not create an HdAddress
-  | CreateHdWalletAddressFailed CreateHdAddressError
-
 deriveSafeCopy 1 'base ''CreateHdRootError
 deriveSafeCopy 1 'base ''CreateHdAccountError
 deriveSafeCopy 1 'base ''CreateHdAddressError
@@ -114,7 +111,7 @@ createHdAccount :: HdAccountId
 createHdAccount accountId checkpoint = do
     -- Check that the root ID exists
     zoomHdRootId CreateHdAccountUnknownRoot rootId $
-      return ()
+        return ()
 
     zoom hdWalletsAccounts $ do
         exists <- gets $ IxSet.member accountId

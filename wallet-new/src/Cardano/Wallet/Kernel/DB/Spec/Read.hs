@@ -1,8 +1,8 @@
 -- | READ-only operations on the wallet-spec state
 module Cardano.Wallet.Kernel.DB.Spec.Read (
-    -- * Reads
-    accountTotalBalance
-  , accountUtxo
+    -- * Queries
+    queryAccountTotalBalance
+  , queryAccountUtxo
   ) where
 
 import           Universum
@@ -13,23 +13,24 @@ import qualified Pos.Core as Core
 import           Pos.Core.Txp (TxOut (..), TxOutAux (..))
 import           Pos.Txp (Utxo)
 
+import           Cardano.Wallet.Kernel.DB.HdWallet
+import qualified Cardano.Wallet.Kernel.DB.HdWallet.Read as HD
 import           Cardano.Wallet.Kernel.DB.InDb
 import           Cardano.Wallet.Kernel.DB.Spec
 import           Cardano.Wallet.Kernel.DB.Spec.Util
 
 import           Cardano.Wallet.Kernel.DB.Util.IxSet (IxSet)
 import qualified Cardano.Wallet.Kernel.DB.Util.IxSet as IxSet
-import           Cardano.Wallet.Kernel.DB.HdWallet (HdAddress)
 
 {-------------------------------------------------------------------------------
   An address is considered "ours" if it belongs to the set of "our" addresses.
   The following pure functions are given the set of "our" addresses to enable filtering.
 -------------------------------------------------------------------------------}
 
+-- | If an Address is in the given set, it will occur exactly once or not at all
 ourAddr :: IxSet HdAddress -> Core.Address -> Bool
 ourAddr addrs addr =
-    1 == (IxSet.size $
-            IxSet.getEQ addr addrs)
+    1 == IxSet.size (IxSet.getEQ addr addrs)
 
 -- | Determines whether the transaction output address is one of "ours"
 ourTxOut :: IxSet HdAddress -> TxOutAux -> Bool
@@ -38,8 +39,7 @@ ourTxOut addrs tx
 
 -- | Filters the given utxo by selecting only utxo outputs that are "ours"
 ourUtxo :: IxSet HdAddress -> Utxo -> Utxo
-ourUtxo addrs utxo
-    = Map.filter (ourTxOut addrs) utxo
+ourUtxo addrs = Map.filter (ourTxOut addrs)
 
 {-------------------------------------------------------------------------------
   Pure functions that support read-only operations on an account Checkpoint, as
@@ -88,3 +88,20 @@ accountTotalBalance addrs c
 
         availableBalance = accountAvailableBalance c
         changeBalance    = balance (accountChange ourUtxo' c)
+
+{-------------------------------------------------------------------------------
+  Public queries on an account, as defined in the Wallet Spec
+-------------------------------------------------------------------------------}
+
+queryAccountTotalBalance :: HdAccountId -> HD.HdQueryErr UnknownHdAccount Core.Coin
+queryAccountTotalBalance accountId db
+    = accountTotalBalance <$> ourAddrs <*> checkpoint
+    where
+        checkpoint = HD.readHdAccountCurrentCheckpoint accountId db
+        ourAddrs   = HD.readAddressesByAccountId       accountId db
+
+queryAccountUtxo :: HdAccountId -> HD.HdQueryErr UnknownHdAccount Utxo
+queryAccountUtxo accountId db
+    = accountUtxo <$> checkpoint
+    where
+        checkpoint = HD.readHdAccountCurrentCheckpoint accountId db

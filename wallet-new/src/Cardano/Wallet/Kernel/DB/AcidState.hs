@@ -34,8 +34,6 @@ import           Universum
 
 import           Control.Lens.TH (makeLenses)
 
-import           Formatting ((%), sformat, build)
-
 import           Data.Acid (Query, Update, makeAcidic)
 import qualified Data.Map.Strict as Map
 import           Data.SafeCopy (base, deriveSafeCopy)
@@ -127,14 +125,8 @@ newPending accountId tx = runUpdate' . zoom dbHdWallets $
 applyBlock :: (Map HdAccountId PrefilteredBlock, BlockMeta) -> Update DB ()
 applyBlock (blocksByAccount,meta) = runUpdateNoErrors $
     zoom dbHdWallets $
-        forM_ (Map.toList blocksByAccount) $ \(accountId,prefBlock) -> do
-            mapUpdateErrors createAccountErr $
-                createHdAccountIfNotExists accountId initAccountUtxo
-
-            mapUpdateErrors createAddressErr $
-                createHdAddresses (pfbAddrs prefBlock)
-
-            zoomHdAccountId unknownAccountErr accountId $
+        forM_ (Map.toList blocksByAccount) $ \(accountId,prefBlock) ->
+            zoomHdAccountIdWithCreate accountId (pfbAddrs prefBlock) initAccountUtxo $
                 zoom hdAccountCheckpoints $
                     modify $ Spec.applyBlock (prefBlock,meta)
      where
@@ -143,15 +135,6 @@ applyBlock (blocksByAccount,meta) = runUpdateNoErrors $
          -- discovered during ApplyBlock, we can assume that there was no genesis utxo,
          -- hence we use empty initial utxo for such new accounts.
          initAccountUtxo = Map.empty
-
-         unknownAccountErr :: UnknownHdAccount -> Void
-         unknownAccountErr e = error $ sformat ("UnknownHdAccount "%build) e
-
-         createAccountErr :: HD.CreateHdAccountError -> Void
-         createAccountErr e = error $ sformat ("CreateHdAccountError "%build) e
-
-         createAddressErr :: HD.CreateHdAddressError -> Void
-         createAddressErr e = error $ sformat ("CreateHdAddressError "%build) e
 
 -- | Switch to a fork
 --
@@ -183,18 +166,22 @@ createHdWallet :: HdRootId
                -> Update DB (Either HD.CreateHdWalletError ())
 createHdWallet rootId name spendingPassword assuranceLevel created utxoByAccount
     = runUpdate' . zoom dbHdWallets $ do
-        mapUpdateErrors HD.CreateHdWalletRootFailed
-            $ void
-            $ HD.createHdRoot rootId name spendingPassword assuranceLevel created
-        mapUpdateErrors HD.CreateHdWalletAccountFailed
-            $ mapM_ createHdAccount' utxoByAccountL
-        mapUpdateErrors HD.CreateHdWalletAddressFailed
-            $ mapM_ createHdAddrs' utxoByAccountL
+          mapUpdateErrors HD.CreateHdWalletRootFailed
+              $ void
+              $ HD.createHdRoot rootId name spendingPassword assuranceLevel created
+          cannotFail
+              $ mapM_ createHdAccountWithAddrs utxoByAccountL
+
     where
         utxoByAccountL = Map.toList utxoByAccount
 
-        createHdAccount' (accId,(utxo,_))     = createHdAccount accId utxo
-        createHdAddrs'   (_,    (_   ,addrs)) = createHdAddresses addrs
+        -- | Cannot fail with domain-level errors (we avoid any failure due
+        --   to already existing accounts or addresses, or missing parent entities)
+        createHdAccountWithAddrs (accId,(utxo,addrs)) = do
+            cannotFail $
+                createHdAccount accId utxo
+            cannotFail $
+                createHdAddresses addrs
 
 -- | Create an HdAccount for the given HdAccountId and Utxo.
 --
@@ -215,29 +202,20 @@ createHdAccount accountId utxo = HD.createHdAccount accountId newCheckpoint
              , _checkpointBlockMeta   = BlockMeta . InDb $ Map.empty
              }
 
-createHdAccountIfNotExists :: HdAccountId
-                           -> Utxo
-                           -> Update' HdWallets HD.CreateHdAccountError ()
-createHdAccountIfNotExists accId initUtxo = do
-    exists <- zoom hdWalletsAccounts $ gets (IxSet.member accId)
-
-    unless exists $
-        createHdAccount accId initUtxo
-
-createHdAddressIfNotExists :: HdAddressId
-                           -> Core.Address
-                           -> Update' HdWallets HD.CreateHdAddressError ()
-createHdAddressIfNotExists addressId address = do
-   exists <- zoom hdWalletsAddresses $ gets (IxSet.member addressId)
-
-   unless exists $
-       HD.createHdAddress addressId (InDb address)
-
 -- | Create a collection of HdAddresses (only create an address if it does not
 --   already exist)
 createHdAddresses :: [AddrWithId]
-                  -> Update' HdWallets HD.CreateHdAddressError ()
+                  -> Update' HdWallets Void ()
 createHdAddresses = mapM_ (uncurry createHdAddressIfNotExists)
+
+createHdAddressIfNotExists :: HdAddressId
+                           -> Core.Address
+                           -> Update' HdWallets Void ()
+createHdAddressIfNotExists addressId address = do
+   exists <- zoom hdWalletsAddresses $ gets (IxSet.member addressId)
+   unless exists $
+       cannotFail $
+           HD.createHdAddress addressId (InDb address)
 
 {-------------------------------------------------------------------------------
   Wrap HD C(R)UD operations
@@ -283,6 +261,41 @@ deleteHdRoot rootId = runUpdateNoErrors . zoom dbHdWallets $
 deleteHdAccount :: HdAccountId -> Update DB (Either UnknownHdRoot ())
 deleteHdAccount accId = runUpdate' . zoom dbHdWallets $
     HD.deleteHdAccount accId
+
+{-------------------------------------------------------------------------------
+  Error handling utils and safe account zooming
+-------------------------------------------------------------------------------}
+
+-- | Handles a domain error we consider to be an impossible occurence
+--   (at the call site of this function)
+impossibleErr :: forall e e'.
+                 e
+              -> e'
+impossibleErr _ = error "undefined" -- TODO do nothing
+
+-- | `mapUpdateErrors` for "impossible" domain errors, used to assert that
+--   the domain error `e` is not a possibility in the calling context
+cannotFail :: forall st e e' a.
+              Update' st e a
+           -> Update' st e' a
+cannotFail = mapUpdateErrors impossibleErr
+
+-- | Create an account and any addresses that do not exist, then zoom safely
+--   to the accountId
+zoomHdAccountIdWithCreate :: HdAccountId
+                          -> [AddrWithId]
+                          -> Utxo
+                          -> Update' HdAccount Void ()
+                          -> Update' HdWallets Void ()
+zoomHdAccountIdWithCreate accId addrs initUtxo updateAction = do
+    exists <- zoom hdWalletsAccounts $ gets (IxSet.member accId)
+    unless exists $
+        cannotFail $
+            createHdAccount accId initUtxo
+
+    createHdAddresses addrs
+
+    zoomHdAccountId impossibleErr accId updateAction
 
 {-------------------------------------------------------------------------------
   Acid-state magic

@@ -45,6 +45,7 @@ module Test.Pos.Core.Gen
 
         -- Pos.Core.Slotting Generators
         , genEpochIndex
+        , genEpochOrSlot
         , genFlatSlotId
         , genLocalSlotIndex
         , genSlotCount
@@ -136,10 +137,10 @@ import           Pos.Core.Common (Address (..), AddrAttributes (..),
                                   TxFeePolicy (..), TxSizeLinear (..))
 import           Pos.Core.Configuration (GenesisHash (..))
 import           Pos.Core.Delegation (HeavyDlgIndex (..), LightDlgIndices (..), ProxySKHeavy)
-import           Pos.Core.Slotting (EpochIndex (..), FlatSlotId,
-                                    LocalSlotIndex (..), SlotCount (..),
-                                    SlotId (..), TimeDiff (..),
-                                    Timestamp (..))
+import           Pos.Core.Slotting (EpochIndex (..), EpochOrSlot (..),
+                                    FlatSlotId, LocalSlotIndex (..),
+                                    SlotCount (..), SlotId (..),
+                                    TimeDiff (..), Timestamp (..))
 import           Pos.Core.Ssc (Commitment, CommitmentSignature, CommitmentsMap,
                                mkCommitmentsMap, mkSscProof, mkVssCertificate,
                                mkVssCertificatesMap, Opening, OpeningsMap,
@@ -398,6 +399,12 @@ genProxySKHeavy =
 
 genEpochIndex :: Gen EpochIndex
 genEpochIndex = EpochIndex <$> Gen.word64 Range.constantBounded
+
+genEpochOrSlot :: Gen EpochOrSlot
+genEpochOrSlot =
+    Gen.choice [ EpochOrSlot . Left <$> genEpochIndex
+               , EpochOrSlot . Right <$> genSlotId
+               ]
 
 genFlatSlotId :: Gen FlatSlotId
 genFlatSlotId = Gen.word64 Range.constantBounded
